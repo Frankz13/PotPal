@@ -83,3 +83,19 @@ npm run build
 ├── package.json        # Dipendenze e script npm
 └── tsconfig.json       # Configurazione TypeScript
 ```
+
+## MVP flow
+
+1. Home mostra la lista delle Unit salvate in locale.
+2. Tocca **Add Unit** e crea una unit con `name`, `location` e `notes` opzionali.
+3. Apri una Unit per vedere dettaglio e galleria foto.
+4. In dettaglio usa **Scatta foto** o **Da libreria** per aggiungere immagini persistenti.
+5. Chiudi e riapri l'app: Unit e foto restano disponibili perché salvate in JSON locale.
+
+### Come provarlo
+
+- Avvia l'app con `npm run start`.
+- Crea una unit.
+- Aggiungi 2 foto dalla camera o dalla libreria.
+- Chiudi completamente l'app e riaprila.
+- Verifica che unit e foto siano ancora presenti.
