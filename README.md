@@ -2,6 +2,8 @@
 
 App mobile/web basata su Expo Router.
 
+> Repository in modalità **single-app**: usa sempre la cartella root del repo (`/workspace/PotPal`) per installazione, avvio e sviluppo.
+
 ## Requisiti
 
 - Node.js **20.x** (consigliato LTS)
