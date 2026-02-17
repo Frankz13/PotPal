@@ -1,50 +1,85 @@
-# Welcome to your Expo app 👋
+# PotPal
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App mobile/web basata su Expo Router.
 
-## Get started
+## Requisiti
 
-1. Install dependencies
+- Node.js **20.x** (consigliato LTS)
+- npm **10+**
+- Expo CLI (usata tramite `npx`, non serve install globale)
 
-   ```bash
-   npm install
-   ```
+> Per Android/iOS reale servono anche gli strumenti di sviluppo della piattaforma (Android Studio / Xcode), ma per sviluppo locale base basta Expo Go o web.
 
-2. Start the app
+## Avvio da zero
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+1. Installa le dipendenze:
 
 ```bash
-npm run reset-project
+npm ci
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Avvia il progetto:
 
-## Learn more
+```bash
+npm run start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Script utili
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- Avvio dev server Expo:
 
-## Join the community
+```bash
+npm run start
+```
 
-Join our community of developers creating universal apps.
+- Avvio su Android:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npm run android
+```
+
+- Avvio su iOS:
+
+```bash
+npm run ios
+```
+
+- Avvio su Web:
+
+```bash
+npm run web
+```
+
+- Lint:
+
+```bash
+npm run lint
+```
+
+- Format (autofix ESLint):
+
+```bash
+npm run format
+```
+
+- Build/export web:
+
+```bash
+npm run build
+```
+
+## Struttura cartelle
+
+```text
+.
+├── app/                # Route Expo Router (screen/layout)
+├── assets/             # Immagini e risorse statiche
+├── components/         # Componenti UI riutilizzabili
+├── constants/          # Costanti condivise (es. temi)
+├── hooks/              # Hook custom React
+├── scripts/            # Script di utilità progetto
+├── app.json            # Configurazione Expo
+├── eslint.config.js    # Configurazione ESLint
+├── package.json        # Dipendenze e script npm
+└── tsconfig.json       # Configurazione TypeScript
+```
