@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useLayoutEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -21,11 +21,14 @@ import type { Unit, UnitPhoto } from '@/lib/models';
 import { loadUnits, persistPhoto, saveUnits } from '@/lib/storage';
 
 export default function UnitDetailScreen() {
+  const DONE_FEEDBACK_MS = 8000;
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const [unit, setUnit] = useState<Unit | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
   const [isEditingIntervals, setIsEditingIntervals] = useState(false);
+  const [doneFeedbackTasks, setDoneFeedbackTasks] = useState<Partial<Record<CareTaskKey, boolean>>>({});
+  const doneFeedbackTimersRef = useRef<Partial<Record<CareTaskKey, ReturnType<typeof setTimeout>>>>({});
 
   const ensureDisplayUri = useCallback((path: string) => {
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(path)) {
@@ -48,6 +51,15 @@ export default function UnitDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       void refreshUnit();
+
+      setDoneFeedbackTasks({});
+
+      Object.values(doneFeedbackTimersRef.current).forEach((timer) => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+      });
+      doneFeedbackTimersRef.current = {};
     }, [refreshUnit]),
   );
 
@@ -108,9 +120,19 @@ export default function UnitDetailScreen() {
 
   const markCareDone = useCallback(
     async (taskKey: CareTaskKey) => {
-      if (!unit) {
+      if (!unit || doneFeedbackTasks[taskKey]) {
         return;
       }
+
+      setDoneFeedbackTasks((current) => ({ ...current, [taskKey]: true }));
+
+      if (doneFeedbackTimersRef.current[taskKey]) {
+        clearTimeout(doneFeedbackTimersRef.current[taskKey]);
+      }
+
+      doneFeedbackTimersRef.current[taskKey] = setTimeout(() => {
+        setDoneFeedbackTasks((current) => ({ ...current, [taskKey]: false }));
+      }, DONE_FEEDBACK_MS);
 
       const nextUnit: Unit = {
         ...unit,
@@ -125,7 +147,7 @@ export default function UnitDetailScreen() {
 
       await updateUnit(nextUnit);
     },
-    [unit, updateUnit],
+    [doneFeedbackTasks, unit, updateUnit],
   );
 
   const updateInterval = useCallback(
@@ -258,6 +280,7 @@ export default function UnitDetailScreen() {
 
         {(Object.keys(unit.care) as CareTaskKey[]).map((taskKey) => {
           const task = unit.care[taskKey];
+          const isDoneFeedbackVisible = Boolean(doneFeedbackTasks[taskKey]);
           return (
             <View key={taskKey} style={styles.careRow}>
               <View style={styles.careInfo}>
@@ -273,8 +296,11 @@ export default function UnitDetailScreen() {
                   />
                 ) : null}
               </View>
-              <Pressable style={styles.button} onPress={() => void markCareDone(taskKey)}>
-                <Text style={styles.buttonText}>Done</Text>
+              <Pressable
+                style={[styles.button, isDoneFeedbackVisible ? styles.buttonDisabled : null]}
+                disabled={isDoneFeedbackVisible}
+                onPress={() => void markCareDone(taskKey)}>
+                <Text style={styles.buttonText}>{isDoneFeedbackVisible ? 'Done ✓' : 'Done'}</Text>
               </Pressable>
             </View>
           );
@@ -400,6 +426,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.65,
   },
   buttonSecondary: {
     flex: 1,
