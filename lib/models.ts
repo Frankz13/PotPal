@@ -1,3 +1,5 @@
+import type { UnitCare } from '@/lib/care';
+
 export type UnitPhoto = {
   id: string;
   unitId: string;
@@ -12,4 +14,5 @@ export type Unit = {
   notes?: string;
   createdAt: string;
   photos: UnitPhoto[];
+  care: UnitCare;
 };

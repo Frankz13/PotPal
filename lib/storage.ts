@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
+import { normalizeCare } from '@/lib/care';
 import type { Unit } from '@/lib/models';
 
 const DATA_FILE = `${FileSystem.documentDirectory}units.json`;
@@ -13,13 +14,22 @@ export async function loadUnits(): Promise<Unit[]> {
     }
 
     const raw = await FileSystem.readAsStringAsync(DATA_FILE);
-    const parsed = JSON.parse(raw) as Unit[];
+    const parsed = JSON.parse(raw) as Array<Partial<Unit>>;
 
     if (!Array.isArray(parsed)) {
       return [];
     }
 
-    return parsed;
+    return parsed.map((unit) => ({
+      ...unit,
+      id: unit.id ?? `${Date.now()}`,
+      name: unit.name ?? '',
+      location: unit.location ?? '',
+      notes: unit.notes,
+      createdAt: unit.createdAt ?? new Date().toISOString(),
+      photos: unit.photos ?? [],
+      care: normalizeCare(unit.care),
+    }));
   } catch {
     return [];
   }

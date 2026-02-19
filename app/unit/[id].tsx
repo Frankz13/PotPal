@@ -11,9 +11,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
+import { CARE_TASK_LABELS, type CareTaskKey } from '@/lib/care';
 import type { Unit, UnitPhoto } from '@/lib/models';
 import { loadUnits, persistPhoto, saveUnits } from '@/lib/storage';
 
@@ -22,6 +24,7 @@ export default function UnitDetailScreen() {
   const navigation = useNavigation();
   const [unit, setUnit] = useState<Unit | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
+  const [isEditingIntervals, setIsEditingIntervals] = useState(false);
 
   const ensureDisplayUri = useCallback((path: string) => {
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(path)) {
@@ -50,6 +53,62 @@ export default function UnitDetailScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({ title: unit?.name ?? 'Unit detail' });
   }, [navigation, unit?.name]);
+
+  const updateUnit = useCallback(
+    async (nextUnit: Unit) => {
+      setUnit(nextUnit);
+      const units = await loadUnits();
+      const updatedUnits = units.map((item) => (item.id === nextUnit.id ? nextUnit : item));
+      await saveUnits(updatedUnits);
+    },
+    [],
+  );
+
+  const markCareDone = useCallback(
+    async (taskKey: CareTaskKey) => {
+      if (!unit) {
+        return;
+      }
+
+      const nextUnit: Unit = {
+        ...unit,
+        care: {
+          ...unit.care,
+          [taskKey]: {
+            ...unit.care[taskKey],
+            lastDoneISO: new Date().toISOString(),
+          },
+        },
+      };
+
+      await updateUnit(nextUnit);
+    },
+    [unit, updateUnit],
+  );
+
+  const updateInterval = useCallback(
+    async (taskKey: CareTaskKey, rawValue: string) => {
+      if (!unit) {
+        return;
+      }
+
+      const parsed = Number(rawValue);
+      const intervalDays = Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 1;
+      const nextUnit: Unit = {
+        ...unit,
+        care: {
+          ...unit.care,
+          [taskKey]: {
+            ...unit.care[taskKey],
+            intervalDays,
+          },
+        },
+      };
+
+      await updateUnit(nextUnit);
+    },
+    [unit, updateUnit],
+  );
 
   const addPhotoFromCamera = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -111,36 +170,26 @@ export default function UnitDetailScreen() {
       createdAt: new Date().toISOString(),
     };
 
-    setUnit((prev) => {
-      if (!prev || prev.id !== unit.id) {
-        return prev;
-      }
+    const nextUnit: Unit = {
+      ...unit,
+      photos: [photo, ...unit.photos],
+    };
 
-      return {
-        ...prev,
-        photos: [photo, ...prev.photos],
-      };
-    });
-
-    const units = await loadUnits();
-    const updatedUnits = units.map((item) => {
-      if (item.id !== unit.id) {
-        return item;
-      }
-
-      return {
-        ...item,
-        photos: [photo, ...item.photos],
-      };
-    });
-
-    await saveUnits(updatedUnits);
+    await updateUnit(nextUnit);
     setPendingPhotoUri(null);
     await refreshUnit();
   };
 
   const cancelPendingPhoto = () => {
     setPendingPhotoUri(null);
+  };
+
+  const formatLastDone = (lastDoneISO: string | null) => {
+    if (!lastDoneISO) {
+      return 'Never';
+    }
+
+    return new Date(lastDoneISO).toLocaleDateString();
   };
 
   if (!unit) {
@@ -156,6 +205,39 @@ export default function UnitDetailScreen() {
       <Text style={styles.name}>{unit.name}</Text>
       <Text style={styles.meta}>Location: {unit.location}</Text>
       {unit.notes ? <Text style={styles.meta}>Note: {unit.notes}</Text> : null}
+
+      <View style={styles.careSection}>
+        <View style={styles.careHeader}>
+          <Text style={styles.careTitle}>Care</Text>
+          <Pressable style={styles.buttonSecondarySmall} onPress={() => setIsEditingIntervals((prev) => !prev)}>
+            <Text style={styles.buttonSecondaryText}>{isEditingIntervals ? 'Done editing' : 'Edit intervals'}</Text>
+          </Pressable>
+        </View>
+
+        {(Object.keys(unit.care) as CareTaskKey[]).map((taskKey) => {
+          const task = unit.care[taskKey];
+          return (
+            <View key={taskKey} style={styles.careRow}>
+              <View style={styles.careInfo}>
+                <Text style={styles.careLabel}>{CARE_TASK_LABELS[taskKey]}</Text>
+                <Text style={styles.careMeta}>every {task.intervalDays} days</Text>
+                <Text style={styles.careMeta}>last done: {formatLastDone(task.lastDoneISO)}</Text>
+                {isEditingIntervals ? (
+                  <TextInput
+                    defaultValue={`${task.intervalDays}`}
+                    keyboardType="number-pad"
+                    style={styles.intervalInput}
+                    onEndEditing={(event) => void updateInterval(taskKey, event.nativeEvent.text)}
+                  />
+                ) : null}
+              </View>
+              <Pressable style={styles.button} onPress={() => void markCareDone(taskKey)}>
+                <Text style={styles.buttonText}>Done</Text>
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
 
       <View style={styles.buttonRow}>
         <Pressable style={styles.button} onPress={addPhotoFromCamera}>
@@ -219,6 +301,52 @@ const styles = StyleSheet.create({
   meta: {
     color: '#374151',
   },
+  careSection: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    marginTop: 10,
+  },
+  careHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  careTitle: {
+    fontWeight: '700',
+    fontSize: 20,
+  },
+  careRow: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    padding: 10,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  careInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  careLabel: {
+    fontWeight: '600',
+  },
+  careMeta: {
+    color: '#4b5563',
+  },
+  intervalInput: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    width: 120,
+  },
   buttonRow: {
     flexDirection: 'row',
     gap: 8,
@@ -237,6 +365,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 10,
+    alignItems: 'center',
+  },
+  buttonSecondarySmall: {
+    borderColor: '#2d7a46',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     alignItems: 'center',
   },
   buttonText: {
