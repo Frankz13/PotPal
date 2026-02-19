@@ -5,6 +5,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import {
   Alert,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +21,19 @@ export default function UnitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const [unit, setUnit] = useState<Unit | null>(null);
+  const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
+
+  const ensureDisplayUri = useCallback((path: string) => {
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(path)) {
+      return path;
+    }
+
+    if (Platform.OS !== 'web' && path.startsWith('/')) {
+      return `file://${path}`;
+    }
+
+    return path;
+  }, []);
 
   const refreshUnit = useCallback(async () => {
     const units = await loadUnits();
@@ -53,7 +68,7 @@ export default function UnitDetailScreen() {
     });
 
     if (!result.canceled) {
-      await addPhoto(result.assets[0].uri);
+      setPendingPhotoUri(result.assets[0].uri);
     }
   };
 
@@ -75,22 +90,37 @@ export default function UnitDetailScreen() {
     });
 
     if (!result.canceled) {
-      await addPhoto(result.assets[0].uri);
+      setPendingPhotoUri(result.assets[0].uri);
     }
   };
 
-  const addPhoto = async (sourceUri: string) => {
+  const addPhoto = async () => {
+    if (!pendingPhotoUri) {
+      return;
+    }
+
     if (!unit) {
       return;
     }
 
-    const persistentPath = await persistPhoto(sourceUri, unit.id);
+    const persistentPath = await persistPhoto(pendingPhotoUri, unit.id);
     const photo: UnitPhoto = {
       id: `${Date.now()}`,
       unitId: unit.id,
       path: persistentPath,
       createdAt: new Date().toISOString(),
     };
+
+    setUnit((prev) => {
+      if (!prev || prev.id !== unit.id) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        photos: [photo, ...prev.photos],
+      };
+    });
 
     const units = await loadUnits();
     const updatedUnits = units.map((item) => {
@@ -105,7 +135,12 @@ export default function UnitDetailScreen() {
     });
 
     await saveUnits(updatedUnits);
+    setPendingPhotoUri(null);
     await refreshUnit();
+  };
+
+  const cancelPendingPhoto = () => {
+    setPendingPhotoUri(null);
   };
 
   if (!unit) {
@@ -136,9 +171,33 @@ export default function UnitDetailScreen() {
 
       <View style={styles.gallery}>
         {unit.photos.map((photo) => (
-          <Image key={photo.id} source={{ uri: photo.path }} style={styles.image} contentFit="cover" />
+          <Image
+            key={photo.id}
+            source={{ uri: ensureDisplayUri(photo.path) }}
+            style={styles.image}
+            contentFit="cover"
+          />
         ))}
       </View>
+
+      <Modal visible={Boolean(pendingPhotoUri)} transparent animationType="fade" onRequestClose={cancelPendingPhoto}>
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewCard}>
+            <Text style={styles.previewTitle}>Anteprima foto</Text>
+            {pendingPhotoUri ? (
+              <Image source={{ uri: pendingPhotoUri }} style={styles.previewImage} contentFit="cover" />
+            ) : null}
+            <View style={styles.previewActions}>
+              <Pressable style={styles.buttonSecondary} onPress={cancelPendingPhoto}>
+                <Text style={styles.buttonSecondaryText}>Annulla</Text>
+              </Pressable>
+              <Pressable style={styles.button} onPress={addPhoto}>
+                <Text style={styles.buttonText}>Salva</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -206,5 +265,34 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 10,
     backgroundColor: '#e5e7eb',
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  previewCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+  },
+  previewTitle: {
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  previewImage: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    backgroundColor: '#e5e7eb',
+  },
+  previewActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
 });
