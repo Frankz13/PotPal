@@ -39,7 +39,7 @@ export default function HomeScreen() {
           renderItem={({ item }) => (
             <Pressable style={styles.card} onPress={() => router.push(`/unit/${item.id}`)}>
               <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardMeta}>{item.location}</Text>
+              <Text style={styles.cardMeta}>Location: {item.location}</Text>
               <Text style={styles.cardMeta}>{item.photos.length} foto</Text>
             </Pressable>
           )}

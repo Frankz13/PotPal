@@ -154,7 +154,7 @@ export default function UnitDetailScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.name}>{unit.name}</Text>
-      <Text style={styles.meta}>Posizione: {unit.location}</Text>
+      <Text style={styles.meta}>Location: {unit.location}</Text>
       {unit.notes ? <Text style={styles.meta}>Note: {unit.notes}</Text> : null}
 
       <View style={styles.buttonRow}>
