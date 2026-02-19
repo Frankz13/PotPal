@@ -4,7 +4,7 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CARE_TASK_LABELS, type CareTaskKey, getDueDate, getTaskStatus } from '@/lib/care';
-import { LOCATION_FILTER_OPTIONS, type LocationFilter, matchesLocationFilter } from '@/lib/locations';
+import { getLocationFilterOptions, type LocationFilter, matchesLocationFilter } from '@/lib/locations';
 import type { Unit } from '@/lib/models';
 import { loadHomeLocationFilter, loadUnits, saveHomeLocationFilter, saveUnits } from '@/lib/storage';
 
@@ -27,14 +27,18 @@ export default function HomeScreen() {
         const [savedUnits, savedFilter] = await Promise.all([loadUnits(), loadHomeLocationFilter()]);
         setUnits(savedUnits);
 
-        if (savedFilter) {
+        if (savedFilter && (savedFilter === 'All' || savedUnits.some((unit) => unit.location === savedFilter))) {
           setLocationFilter(savedFilter);
+        } else {
+          setLocationFilter('All');
         }
       };
 
       void run();
     }, []),
   );
+
+  const locationOptions = useMemo(() => getLocationFilterOptions(units.map((unit) => unit.location)), [units]);
 
   const filteredUnits = useMemo(
     () => units.filter((unit) => matchesLocationFilter(unit.location, locationFilter)),
@@ -122,7 +126,7 @@ export default function HomeScreen() {
           ListHeaderComponent={
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsWrap}>
-                {LOCATION_FILTER_OPTIONS.map((option) => {
+                {locationOptions.map((option) => {
                   const selected = option === locationFilter;
                   return (
                     <Pressable
