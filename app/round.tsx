@@ -13,6 +13,7 @@ export default function RoundScreen() {
   const activeLocation = (params.location as LocationFilter | undefined) ?? 'All';
   const [units, setUnits] = useState<Unit[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [completedTaskKeys, setCompletedTaskKeys] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
@@ -21,6 +22,7 @@ export default function RoundScreen() {
         const filtered = saved.filter((unit) => matchesLocationFilter(unit.location, activeLocation));
         setUnits(filtered);
         setCurrentIndex(0);
+        setCompletedTaskKeys(new Set());
       };
 
       void run();
@@ -37,6 +39,7 @@ export default function RoundScreen() {
       }
 
       const nowISO = new Date().toISOString();
+      setCompletedTaskKeys((prev) => new Set(prev).add(`${currentUnit.id}:${taskKey}`));
 
       setUnits((prev) =>
         prev.map((unit) =>
@@ -80,6 +83,41 @@ export default function RoundScreen() {
 
   const totalCount = units.length;
 
+  const formatLastDone = (lastDoneISO: string | null) => {
+    if (!lastDoneISO) {
+      return 'Never';
+    }
+
+    return new Date(lastDoneISO).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const getDueStatus = (lastDoneISO: string | null, intervalDays: number) => {
+    if (!lastDoneISO) {
+      return 'Overdue';
+    }
+
+    const dueDate = new Date(lastDoneISO);
+    dueDate.setDate(dueDate.getDate() + intervalDays);
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dueDay = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+
+    if (dueDay < today) {
+      return 'Overdue';
+    }
+
+    if (dueDay.getTime() === today.getTime()) {
+      return 'Due today';
+    }
+
+    return 'Upcoming';
+  };
+
   if (totalCount === 0) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -114,14 +152,29 @@ export default function RoundScreen() {
                   <View style={styles.careInfo}>
                     <Text style={styles.careLabel}>{CARE_TASK_LABELS[taskKey]}</Text>
                     <Text style={styles.careMeta}>every {currentUnit.care[taskKey].intervalDays} days</Text>
+                    <Text style={styles.careMeta}>Last done: {formatLastDone(currentUnit.care[taskKey].lastDoneISO)}</Text>
+                    <Text style={styles.careStatus}>
+                      {getDueStatus(currentUnit.care[taskKey].lastDoneISO, currentUnit.care[taskKey].intervalDays)}
+                    </Text>
                   </View>
-                  <Pressable
-                    style={({ pressed }) => [styles.doneButton, pressed && styles.doneButtonPressed]}
-                    onPress={() => {
-                      void markTaskDone(taskKey);
-                    }}>
-                    <Text style={styles.doneButtonText}>Done</Text>
-                  </Pressable>
+                  {(() => {
+                    const isDoneThisSession = completedTaskKeys.has(`${currentUnit.id}:${taskKey}`);
+
+                    return (
+                      <Pressable
+                        disabled={isDoneThisSession}
+                        style={({ pressed }) => [
+                          styles.doneButton,
+                          isDoneThisSession && styles.doneButtonDisabled,
+                          pressed && !isDoneThisSession && styles.doneButtonPressed,
+                        ]}
+                        onPress={() => {
+                          void markTaskDone(taskKey);
+                        }}>
+                        <Text style={styles.doneButtonText}>{isDoneThisSession ? 'Done ✓' : 'Done'}</Text>
+                      </Pressable>
+                    );
+                  })()}
                 </View>
               ))}
             </View>
@@ -202,6 +255,10 @@ const styles = StyleSheet.create({
   careMeta: {
     color: '#6b7280',
   },
+  careStatus: {
+    color: '#1f2937',
+    fontWeight: '600',
+  },
   doneButton: {
     backgroundColor: '#2d7a46',
     paddingHorizontal: 12,
@@ -212,6 +269,9 @@ const styles = StyleSheet.create({
   },
   doneButtonPressed: {
     opacity: 0.7,
+  },
+  doneButtonDisabled: {
+    backgroundColor: '#6b7280',
   },
   doneButtonText: {
     color: 'white',

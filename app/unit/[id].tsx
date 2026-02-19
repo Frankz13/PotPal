@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -50,10 +51,6 @@ export default function UnitDetailScreen() {
     }, [refreshUnit]),
   );
 
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: unit?.name ?? 'Unit detail' });
-  }, [navigation, unit?.name]);
-
   const updateUnit = useCallback(
     async (nextUnit: Unit) => {
       setUnit(nextUnit);
@@ -63,6 +60,51 @@ export default function UnitDetailScreen() {
     },
     [],
   );
+
+  const deleteUnit = useCallback(async () => {
+    if (!unit) {
+      return;
+    }
+
+    const units = await loadUnits();
+    const nextUnits = units.filter((item) => item.id !== unit.id);
+
+    await Promise.all(
+      unit.photos.map(async (photo) => {
+        try {
+          await FileSystem.deleteAsync(photo.path, { idempotent: true });
+        } catch {
+          // best effort cleanup
+        }
+      }),
+    );
+
+    await saveUnits(nextUnits);
+    navigation.navigate('index' as never);
+  }, [navigation, unit]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: unit?.name ?? 'Unit detail',
+      headerRight: () => (
+        <Pressable
+          onPress={() => {
+            Alert.alert('Delete unit?', 'This will remove the unit and its photos.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  void deleteUnit();
+                },
+              },
+            ]);
+          }}>
+          <Text style={styles.deleteHeaderAction}>✕</Text>
+        </Pressable>
+      ),
+    });
+  }, [deleteUnit, navigation, unit?.name]);
 
   const markCareDone = useCallback(
     async (taskKey: CareTaskKey) => {
@@ -382,6 +424,12 @@ const styles = StyleSheet.create({
   buttonSecondaryText: {
     color: '#2d7a46',
     fontWeight: '600',
+  },
+  deleteHeaderAction: {
+    color: '#b91c1c',
+    fontSize: 24,
+    fontWeight: '700',
+    paddingHorizontal: 8,
   },
   galleryTitle: {
     marginTop: 12,
