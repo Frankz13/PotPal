@@ -37,6 +37,24 @@ export default function RoundScreen() {
       }
 
       const nowISO = new Date().toISOString();
+
+      setUnits((prev) =>
+        prev.map((unit) =>
+          unit.id === currentUnit.id
+            ? {
+                ...unit,
+                care: {
+                  ...unit.care,
+                  [taskKey]: {
+                    ...unit.care[taskKey],
+                    lastDoneISO: nowISO,
+                  },
+                },
+              }
+            : unit,
+        ),
+      );
+
       const allUnits = await loadUnits();
       const updatedAllUnits = allUnits.map((unit) => {
         if (unit.id !== currentUnit.id) {
@@ -56,23 +74,6 @@ export default function RoundScreen() {
       });
 
       await saveUnits(updatedAllUnits);
-
-      setUnits((prev) =>
-        prev.map((unit) =>
-          unit.id === currentUnit.id
-            ? {
-                ...unit,
-                care: {
-                  ...unit.care,
-                  [taskKey]: {
-                    ...unit.care[taskKey],
-                    lastDoneISO: nowISO,
-                  },
-                },
-              }
-            : unit,
-        ),
-      );
     },
     [currentUnit],
   );
@@ -114,7 +115,11 @@ export default function RoundScreen() {
                     <Text style={styles.careLabel}>{CARE_TASK_LABELS[taskKey]}</Text>
                     <Text style={styles.careMeta}>every {currentUnit.care[taskKey].intervalDays} days</Text>
                   </View>
-                  <Pressable style={styles.doneButton} onPress={() => void markTaskDone(taskKey)}>
+                  <Pressable
+                    style={({ pressed }) => [styles.doneButton, pressed && styles.doneButtonPressed]}
+                    onPress={() => {
+                      void markTaskDone(taskKey);
+                    }}>
                     <Text style={styles.doneButtonText}>Done</Text>
                   </Pressable>
                 </View>
@@ -202,6 +207,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
+    zIndex: 2,
+    elevation: 2,
+  },
+  doneButtonPressed: {
+    opacity: 0.7,
   },
   doneButtonText: {
     color: 'white',

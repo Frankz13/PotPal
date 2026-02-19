@@ -118,7 +118,7 @@ export default function HomeScreen() {
         <FlatList
           data={filteredUnits}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={filteredUnits.length === 0 ? styles.emptyListContent : styles.listContent}
+          contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsWrap}>
@@ -169,9 +169,11 @@ export default function HomeScreen() {
             </>
           }
           ListEmptyComponent={
-            <Text style={styles.empty}>
-              {units.length === 0 ? 'Nessuna unità. Aggiungine una per iniziare.' : 'Nessuna unità in questa posizione.'}
-            </Text>
+            <View style={styles.emptyContainer}>
+              <Text style={styles.empty}>
+                {units.length === 0 ? 'Nessuna unità. Aggiungine una per iniziare.' : 'Nessuna unità in questa posizione.'}
+              </Text>
+            </View>
           }
           renderItem={({ item }) => (
             <Pressable style={styles.card} onPress={() => router.push(`/unit/${item.id}`)}>
@@ -297,11 +299,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   listContent: {
+    flexGrow: 1,
     gap: 10,
     paddingBottom: 16,
   },
-  emptyListContent: {
-    flexGrow: 1,
+  emptyContainer: {
+    flex: 1,
     justifyContent: 'center',
   },
   empty: {
