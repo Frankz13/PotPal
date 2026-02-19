@@ -14,6 +14,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="add-unit" options={{ title: 'Add Unit' }} />
         <Stack.Screen name="unit/[id]" options={{ title: 'Unit Detail' }} />
+        <Stack.Screen name="round" options={{ title: 'Round' }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

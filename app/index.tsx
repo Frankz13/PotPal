@@ -1,11 +1,12 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CARE_TASK_LABELS, type CareTaskKey, getDueDate, getTaskStatus } from '@/lib/care';
+import { LOCATION_FILTER_OPTIONS, type LocationFilter, matchesLocationFilter } from '@/lib/locations';
 import type { Unit } from '@/lib/models';
-import { loadUnits, saveUnits } from '@/lib/storage';
+import { loadHomeLocationFilter, loadUnits, saveHomeLocationFilter, saveUnits } from '@/lib/storage';
 
 type TodayTask = {
   unitId: string;
@@ -18,22 +19,32 @@ type TodayTask = {
 export default function HomeScreen() {
   const router = useRouter();
   const [units, setUnits] = useState<Unit[]>([]);
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>('All');
 
   useFocusEffect(
     useCallback(() => {
       const run = async () => {
-        const savedUnits = await loadUnits();
+        const [savedUnits, savedFilter] = await Promise.all([loadUnits(), loadHomeLocationFilter()]);
         setUnits(savedUnits);
+
+        if (savedFilter) {
+          setLocationFilter(savedFilter);
+        }
       };
 
       void run();
     }, []),
   );
 
+  const filteredUnits = useMemo(
+    () => units.filter((unit) => matchesLocationFilter(unit.location, locationFilter)),
+    [locationFilter, units],
+  );
+
   const todayTasks = useMemo(() => {
     const dueTasks: TodayTask[] = [];
 
-    for (const unit of units) {
+    for (const unit of filteredUnits) {
       (Object.keys(unit.care) as CareTaskKey[]).forEach((taskKey) => {
         const task = unit.care[taskKey];
         const status = getTaskStatus(task.lastDoneISO, task.intervalDays);
@@ -64,7 +75,7 @@ export default function HomeScreen() {
 
       return getDueDate(a.lastDoneISO, a.intervalDays).getTime() - getDueDate(b.lastDoneISO, b.intervalDays).getTime();
     });
-  }, [units]);
+  }, [filteredUnits]);
 
   const markTaskDone = useCallback(
     async (unitId: string, taskKey: CareTaskKey) => {
@@ -92,15 +103,42 @@ export default function HomeScreen() {
     [units],
   );
 
+  const onSelectFilter = useCallback(async (nextFilter: LocationFilter) => {
+    setLocationFilter(nextFilter);
+    await saveHomeLocationFilter(nextFilter);
+  }, []);
+
+  const onStartRound = useCallback(() => {
+    router.push({ pathname: '/round', params: { location: locationFilter } });
+  }, [locationFilter, router]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
         <FlatList
-          data={units}
+          data={filteredUnits}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={units.length === 0 ? styles.emptyListContent : styles.listContent}
+          contentContainerStyle={filteredUnits.length === 0 ? styles.emptyListContent : styles.listContent}
           ListHeaderComponent={
             <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsWrap}>
+                {LOCATION_FILTER_OPTIONS.map((option) => {
+                  const selected = option === locationFilter;
+                  return (
+                    <Pressable
+                      key={option}
+                      style={[styles.chip, selected && styles.chipSelected]}
+                      onPress={() => void onSelectFilter(option)}>
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{option}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              <Pressable style={styles.roundButton} onPress={onStartRound}>
+                <Text style={styles.roundButtonText}>Start round</Text>
+              </Pressable>
+
               <View style={styles.todaySection}>
                 <Text style={styles.todayTitle}>Today</Text>
                 {todayTasks.length === 0 ? <Text style={styles.empty}>Niente da fare oggi 🎉</Text> : null}
@@ -130,7 +168,11 @@ export default function HomeScreen() {
               </View>
             </>
           }
-          ListEmptyComponent={<Text style={styles.empty}>Nessuna unità. Aggiungine una per iniziare.</Text>}
+          ListEmptyComponent={
+            <Text style={styles.empty}>
+              {units.length === 0 ? 'Nessuna unità. Aggiungine una per iniziare.' : 'Nessuna unità in questa posizione.'}
+            </Text>
+          }
           renderItem={({ item }) => (
             <Pressable style={styles.card} onPress={() => router.push(`/unit/${item.id}`)}>
               <Text style={styles.cardTitle}>{item.name}</Text>
@@ -155,6 +197,41 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
     gap: 12,
+  },
+  chipsWrap: {
+    gap: 8,
+    paddingBottom: 12,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'white',
+  },
+  chipSelected: {
+    borderColor: '#2d7a46',
+    backgroundColor: '#ecfdf3',
+  },
+  chipText: {
+    color: '#374151',
+    fontWeight: '500',
+  },
+  chipTextSelected: {
+    color: '#2d7a46',
+    fontWeight: '700',
+  },
+  roundButton: {
+    backgroundColor: '#1f6feb',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  roundButtonText: {
+    color: 'white',
+    fontWeight: '700',
   },
   todaySection: {
     borderWidth: 1,
