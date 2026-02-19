@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Unit } from '@/lib/models';
+import { createDefaultCare } from '@/lib/care';
 import { loadUnits, saveUnits } from '@/lib/storage';
 
 const LOCATION_PRESETS = ['Veranda', 'Serra', 'Casa', 'Marciapiede'] as const;
@@ -57,6 +58,7 @@ export default function AddUnitScreen() {
       notes: notes.trim() || undefined,
       createdAt: new Date().toISOString(),
       photos: [],
+      care: createDefaultCare(),
     };
 
     await saveUnits([newUnit, ...units]);
