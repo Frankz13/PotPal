@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Unit } from '@/lib/models';
 import { loadUnits, saveUnits } from '@/lib/storage';
@@ -33,45 +34,52 @@ export default function AddUnitScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Add Unit</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.title}>Add Unit</Text>
 
-      <View style={styles.fieldWrap}>
-        <Text style={styles.label}>Name *</Text>
-        <TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Es. Pomodori" />
-      </View>
+        <View style={styles.fieldWrap}>
+          <Text style={styles.label}>Name *</Text>
+          <TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Es. Pomodori" />
+        </View>
 
-      <View style={styles.fieldWrap}>
-        <Text style={styles.label}>Location *</Text>
-        <TextInput
-          value={location}
-          onChangeText={setLocation}
-          style={styles.input}
-          placeholder="Es. veranda / serra / casa"
-        />
-      </View>
+        <View style={styles.fieldWrap}>
+          <Text style={styles.label}>Location *</Text>
+          <TextInput
+            value={location}
+            onChangeText={setLocation}
+            style={styles.input}
+            placeholder="Es. veranda / serra / casa"
+          />
+        </View>
 
-      <View style={styles.fieldWrap}>
-        <Text style={styles.label}>Notes (opzionale)</Text>
-        <TextInput
-          value={notes}
-          onChangeText={setNotes}
-          style={[styles.input, styles.notesInput]}
-          placeholder="Dettagli utili..."
-          multiline
-        />
-      </View>
+        <View style={styles.fieldWrap}>
+          <Text style={styles.label}>Notes (opzionale)</Text>
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            style={[styles.input, styles.notesInput]}
+            placeholder="Dettagli utili..."
+            multiline
+          />
+        </View>
 
-      <Pressable style={styles.button} onPress={onSave}>
-        <Text style={styles.buttonText}>Salva Unit</Text>
-      </Pressable>
-    </ScrollView>
+        <Pressable style={styles.button} onPress={onSave}>
+          <Text style={styles.buttonText}>Salva Unit</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
   container: {
     padding: 16,
+    paddingTop: 12,
     gap: 16,
   },
   title: {
