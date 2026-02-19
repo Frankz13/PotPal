@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { Unit } from '@/lib/models';
 import { createDefaultCare } from '@/lib/care';
+import { LOCATION_PRESETS } from '@/lib/locations';
+import type { Unit } from '@/lib/models';
 import { loadUnits, saveUnits } from '@/lib/storage';
 
-const LOCATION_PRESETS = ['Veranda', 'Serra', 'Casa', 'Marciapiede'] as const;
 const CUSTOM_OPTION = 'Custom...';
 
 type PresetOption = (typeof LOCATION_PRESETS)[number] | typeof CUSTOM_OPTION;

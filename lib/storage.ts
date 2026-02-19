@@ -1,10 +1,12 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { normalizeCare } from '@/lib/care';
+import type { LocationFilter } from '@/lib/locations';
 import type { Unit } from '@/lib/models';
 
 const DATA_FILE = `${FileSystem.documentDirectory}units.json`;
 const PHOTOS_DIR = `${FileSystem.documentDirectory}unit-photos`;
+const HOME_FILTER_FILE = `${FileSystem.documentDirectory}home-filter.json`;
 
 export async function loadUnits(): Promise<Unit[]> {
   try {
@@ -57,4 +59,24 @@ export async function persistPhoto(uri: string, unitId: string): Promise<string>
   });
 
   return destination;
+}
+
+export async function loadHomeLocationFilter(): Promise<LocationFilter | null> {
+  try {
+    const fileInfo = await FileSystem.getInfoAsync(HOME_FILTER_FILE);
+
+    if (!fileInfo.exists) {
+      return null;
+    }
+
+    const raw = await FileSystem.readAsStringAsync(HOME_FILTER_FILE);
+    const parsed = JSON.parse(raw) as { filter?: LocationFilter };
+    return parsed.filter ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveHomeLocationFilter(filter: LocationFilter): Promise<void> {
+  await FileSystem.writeAsStringAsync(HOME_FILTER_FILE, JSON.stringify({ filter }));
 }
