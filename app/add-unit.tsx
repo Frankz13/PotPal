@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
-  findNodeHandle,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -28,14 +27,13 @@ type PresetOption = (typeof LOCATION_PRESETS)[number] | typeof CUSTOM_OPTION;
 
 export default function AddUnitScreen() {
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
   const speciesSearchInputRef = useRef<TextInput>(null);
-  const notesInputRef = useRef<TextInput>(null);
-  const scrollRetryTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [name, setName] = useState("");
   const [locationOption, setLocationOption] = useState<PresetOption>("Veranda");
   const [customLocation, setCustomLocation] = useState("");
   const [notes, setNotes] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [species, setSpecies] = useState("");
   const [speciesModalVisible, setSpeciesModalVisible] = useState(false);
   const [speciesSearchQuery, setSpeciesSearchQuery] = useState("");
@@ -73,41 +71,6 @@ export default function AddUnitScreen() {
 
   const speciesSuggestions = filterSpeciesOptions(speciesSearchQuery).slice(0, 50);
 
-  useEffect(
-    () => () => {
-      scrollRetryTimeoutsRef.current.forEach((timeoutId) => {
-        clearTimeout(timeoutId);
-      });
-    },
-    [],
-  );
-
-  const scrollToInput = (input: TextInput | null) => {
-    const node = findNodeHandle(input);
-
-    if (!node) {
-      return;
-    }
-
-    scrollRef.current
-      ?.getScrollResponder()
-      ?.scrollResponderScrollNativeHandleToKeyboard(node, 140, true);
-  };
-
-  const scrollToInputWithRetries = (input: TextInput | null) => {
-    scrollToInput(input);
-
-    scrollRetryTimeoutsRef.current.forEach((timeoutId) => {
-      clearTimeout(timeoutId);
-    });
-
-    scrollRetryTimeoutsRef.current = [200, 400].map((delay) =>
-      setTimeout(() => {
-        scrollToInput(input);
-      }, delay),
-    );
-  };
-
   const openSpeciesModal = () => {
     setSpeciesSearchQuery(species);
     setSpeciesModalVisible(true);
@@ -119,6 +82,22 @@ export default function AddUnitScreen() {
   const closeSpeciesModal = () => {
     setSpeciesModalVisible(false);
   };
+
+  const openNotesModal = () => {
+    setNotesDraft(notes);
+    setNotesModalVisible(true);
+  };
+
+  const closeNotesModal = () => {
+    setNotesModalVisible(false);
+  };
+
+  const saveNotes = () => {
+    setNotes(notesDraft);
+    closeNotesModal();
+  };
+
+  const notesPreview = notes.trim();
 
   const customSpeciesLabel = speciesSearchQuery.trim();
 
@@ -155,7 +134,6 @@ export default function AddUnitScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
-          ref={scrollRef}
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
@@ -222,15 +200,18 @@ export default function AddUnitScreen() {
 
           <View style={styles.fieldWrap}>
             <Text style={styles.label}>Notes (opzionale)</Text>
-            <TextInput
-              ref={notesInputRef}
-              value={notes}
-              onChangeText={setNotes}
-              onFocus={() => scrollToInputWithRetries(notesInputRef.current)}
-              style={[styles.input, styles.notesInput]}
-              placeholder="Dettagli utili..."
-              multiline
-            />
+            <Pressable
+              onPress={openNotesModal}
+              style={[styles.input, styles.notesRow]}
+              accessibilityRole="button"
+            >
+              <Text
+                style={notesPreview ? styles.inputValue : styles.inputPlaceholder}
+                numberOfLines={2}
+              >
+                {notesPreview || "Add notes..."}
+              </Text>
+            </Pressable>
           </View>
 
           <Pressable style={styles.button} onPress={onSave}>
@@ -238,6 +219,50 @@ export default function AddUnitScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={notesModalVisible}
+        animationType="slide"
+        onRequestClose={closeNotesModal}
+      >
+        <SafeAreaView style={styles.notesModalSafeArea} edges={["top", "bottom"]}>
+          <KeyboardAvoidingView
+            style={styles.notesModalKeyboardAvoiding}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
+            <View style={styles.notesModalHeader}>
+              <Text style={styles.notesModalTitle}>Notes</Text>
+            </View>
+
+            <View style={styles.notesModalContent}>
+              <TextInput
+                value={notesDraft}
+                onChangeText={setNotesDraft}
+                style={[styles.input, styles.notesModalInput]}
+                placeholder="Dettagli utili..."
+                multiline
+                autoFocus
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.notesModalActions}>
+              <Pressable
+                style={[styles.notesModalButton, styles.notesModalCancelButton]}
+                onPress={closeNotesModal}
+              >
+                <Text style={styles.notesModalCancelButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.notesModalButton, styles.notesModalSaveButton]}
+                onPress={saveNotes}
+              >
+                <Text style={styles.notesModalSaveButtonText}>Save</Text>
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
 
       <Modal
         visible={speciesModalVisible}
@@ -398,9 +423,61 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#111827",
   },
-  notesInput: {
+  notesRow: {
     minHeight: 80,
-    textAlignVertical: "top",
+    justifyContent: "center",
+  },
+  notesModalSafeArea: {
+    flex: 1,
+    backgroundColor: "white",
+  },
+  notesModalKeyboardAvoiding: {
+    flex: 1,
+  },
+  notesModalHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  notesModalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  notesModalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  notesModalInput: {
+    flex: 1,
+    minHeight: 240,
+  },
+  notesModalActions: {
+    flexDirection: "row",
+    gap: 10,
+    padding: 16,
+    paddingTop: 8,
+  },
+  notesModalButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  notesModalCancelButton: {
+    backgroundColor: "#f3f4f6",
+  },
+  notesModalSaveButton: {
+    backgroundColor: "#2d7a46",
+  },
+  notesModalCancelButtonText: {
+    color: "#111827",
+    fontWeight: "600",
+  },
+  notesModalSaveButtonText: {
+    color: "white",
+    fontWeight: "700",
   },
   button: {
     backgroundColor: "#2d7a46",
