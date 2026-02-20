@@ -1,4 +1,6 @@
 import { useRouter } from "expo-router";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -18,12 +20,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { createDefaultCare } from "@/lib/care";
 import { filterSpeciesOptions } from "@/lib/species";
 import { LOCATION_PRESETS } from "@/lib/locations";
-import type { Unit } from "@/lib/models";
-import { loadUnits, saveUnits } from "@/lib/storage";
+import type { Unit, UnitPhoto } from "@/lib/models";
+import { loadUnits, persistPhoto, saveUnits } from "@/lib/storage";
 
 const CUSTOM_OPTION = "Custom...";
 
 type PresetOption = (typeof LOCATION_PRESETS)[number] | typeof CUSTOM_OPTION;
+
+type PendingPhoto = {
+  id: string;
+  uri: string;
+  createdAtISO: string;
+};
 
 export default function AddUnitScreen() {
   const router = useRouter();
@@ -37,6 +45,20 @@ export default function AddUnitScreen() {
   const [species, setSpecies] = useState("");
   const [speciesModalVisible, setSpeciesModalVisible] = useState(false);
   const [speciesSearchQuery, setSpeciesSearchQuery] = useState("");
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [previewPhoto, setPreviewPhoto] = useState<PendingPhoto | null>(null);
+
+  const formatPhotoDate = (createdAtISO: string) => {
+    if (!createdAtISO) {
+      return "";
+    }
+
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(createdAtISO));
+  };
 
   useEffect(() => {
     const hydrateLocationPreference = async () => {
@@ -112,19 +134,111 @@ export default function AddUnitScreen() {
 
     const units = await loadUnits();
 
+    const newUnitId = `${Date.now()}`;
+    const photos: UnitPhoto[] = await Promise.all(
+      pendingPhotos.map(async (photo) => {
+        const persistentPath = await persistPhoto(photo.uri, newUnitId);
+        return {
+          id: `${Date.now()}-${Math.random()}`,
+          unitId: newUnitId,
+          path: persistentPath,
+          createdAt: photo.createdAtISO,
+          createdAtISO: photo.createdAtISO,
+        };
+      }),
+    );
+
     const newUnit: Unit = {
-      id: `${Date.now()}`,
+      id: newUnitId,
       name: name.trim(),
       location: selectedLocation,
       species: species.trim(),
       notes: notes.trim() || undefined,
       createdAt: new Date().toISOString(),
-      photos: [],
+      photos,
       care: createDefaultCare(),
     };
 
     await saveUnits([newUnit, ...units]);
     router.back();
+  };
+
+  const addPhotoFromCamera = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Permesso camera richiesto",
+        "Per scattare una foto, abilita l'accesso alla camera dalle impostazioni.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setPreviewPhoto({
+        id: `${Date.now()}-${Math.random()}`,
+        uri: result.assets[0].uri,
+        createdAtISO: new Date().toISOString(),
+      });
+    }
+  };
+
+  const addPhotoFromLibrary = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Permesso libreria richiesto",
+        "Per scegliere una foto, abilita l'accesso alla libreria dalle impostazioni.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+      allowsMultipleSelection: false,
+    });
+
+    if (!result.canceled) {
+      setPreviewPhoto({
+        id: `${Date.now()}-${Math.random()}`,
+        uri: result.assets[0].uri,
+        createdAtISO: new Date().toISOString(),
+      });
+    }
+  };
+
+  const showAddPhotoOptions = () => {
+    Alert.alert("Add photo", "Choose image source", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Camera",
+        onPress: () => {
+          void addPhotoFromCamera();
+        },
+      },
+      {
+        text: "Gallery",
+        onPress: () => {
+          void addPhotoFromLibrary();
+        },
+      },
+    ]);
+  };
+
+  const savePreviewPhoto = () => {
+    if (!previewPhoto) {
+      return;
+    }
+
+    setPendingPhotos((current) => [previewPhoto, ...current]);
+    setPreviewPhoto(null);
   };
 
   return (
@@ -211,6 +325,39 @@ export default function AddUnitScreen() {
               >
                 {notesPreview || "Add notes..."}
               </Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Photos ({pendingPhotos.length})</Text>
+            {pendingPhotos.length === 0 ? (
+              <Text style={styles.inputPlaceholder}>No photos added yet.</Text>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.pendingGallery}
+              >
+                {pendingPhotos.map((photo) => (
+                  <View key={photo.id} style={styles.pendingPhotoCard}>
+                    <Image
+                      source={{ uri: photo.uri }}
+                      style={styles.pendingPhotoThumb}
+                      contentFit="cover"
+                    />
+                    <Text style={styles.pendingPhotoDate}>
+                      {formatPhotoDate(photo.createdAtISO)}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <Pressable
+              style={[styles.buttonSecondary, styles.addPhotoButton]}
+              onPress={showAddPhotoOptions}
+            >
+              <Text style={styles.buttonSecondaryText}>Add photo</Text>
             </Pressable>
           </View>
 
@@ -317,6 +464,37 @@ export default function AddUnitScreen() {
             <Text style={styles.speciesModalCloseButtonText}>Done</Text>
           </Pressable>
         </SafeAreaView>
+      </Modal>
+
+      <Modal
+        visible={Boolean(previewPhoto)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewPhoto(null)}
+      >
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewCard}>
+            <Text style={styles.previewTitle}>Photo preview</Text>
+            {previewPhoto ? (
+              <Image
+                source={{ uri: previewPhoto.uri }}
+                style={styles.previewImage}
+                contentFit="cover"
+              />
+            ) : null}
+            <View style={styles.previewActions}>
+              <Pressable
+                style={styles.buttonSecondary}
+                onPress={() => setPreviewPhoto(null)}
+              >
+                <Text style={styles.buttonSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.button} onPress={savePreviewPhoto}>
+                <Text style={styles.buttonText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -479,6 +657,28 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
   },
+  pendingGallery: {
+    gap: 10,
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  pendingPhotoCard: {
+    width: 120,
+    gap: 4,
+  },
+  pendingPhotoThumb: {
+    width: 120,
+    height: 120,
+    borderRadius: 10,
+    backgroundColor: "#e5e7eb",
+  },
+  pendingPhotoDate: {
+    fontSize: 12,
+    color: "#4b5563",
+  },
+  addPhotoButton: {
+    marginTop: 8,
+  },
   button: {
     backgroundColor: "#2d7a46",
     borderRadius: 12,
@@ -488,5 +688,45 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "white",
     fontWeight: "700",
+  },
+  buttonSecondary: {
+    borderColor: "#2d7a46",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  buttonSecondaryText: {
+    color: "#2d7a46",
+    fontWeight: "600",
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  previewCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+  },
+  previewTitle: {
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  previewImage: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 10,
+    backgroundColor: "#e5e7eb",
+  },
+  previewActions: {
+    flexDirection: "row",
+    gap: 8,
   },
 });

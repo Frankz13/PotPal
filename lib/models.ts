@@ -5,6 +5,7 @@ export type UnitPhoto = {
   unitId: string;
   path: string;
   createdAt: string;
+  createdAtISO?: string;
 };
 
 export type Unit = {
