@@ -22,17 +22,27 @@ export async function loadUnits(): Promise<Unit[]> {
       return [];
     }
 
-    return parsed.map((unit) => ({
-      ...unit,
-      id: unit.id ?? `${Date.now()}`,
-      name: unit.name ?? '',
-      location: unit.location ?? '',
-      species: unit.species ?? '',
-      notes: unit.notes,
-      createdAt: unit.createdAt ?? new Date().toISOString(),
-      photos: (unit.photos ?? []).map((photo) => normalizePhoto(photo, unit.id ?? '')),
-      care: normalizeCare(unit.care),
-    }));
+    return parsed.map((unit) => {
+      const normalizedPhotos = (unit.photos ?? []).map((photo) =>
+        normalizePhoto(photo, unit.id ?? ''),
+      );
+
+      const normalizedCoverPhotoId =
+        unit.coverPhotoId ?? normalizedPhotos[0]?.id ?? undefined;
+
+      return {
+        ...unit,
+        id: unit.id ?? `${Date.now()}`,
+        name: unit.name ?? '',
+        location: unit.location ?? '',
+        species: unit.species ?? '',
+        notes: unit.notes,
+        createdAt: unit.createdAt ?? new Date().toISOString(),
+        photos: normalizedPhotos,
+        coverPhotoId: normalizedCoverPhotoId,
+        care: normalizeCare(unit.care),
+      };
+    });
   } catch {
     return [];
   }

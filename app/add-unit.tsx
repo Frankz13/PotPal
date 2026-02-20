@@ -156,6 +156,7 @@ export default function AddUnitScreen() {
       notes: notes.trim() || undefined,
       createdAt: new Date().toISOString(),
       photos,
+      coverPhotoId: photos[0]?.id,
       care: createDefaultCare(),
     };
 
@@ -484,12 +485,15 @@ export default function AddUnitScreen() {
             ) : null}
             <View style={styles.previewActions}>
               <Pressable
-                style={styles.buttonSecondary}
+                style={[styles.buttonSecondary, styles.previewActionButton]}
                 onPress={() => setPreviewPhoto(null)}
               >
                 <Text style={styles.buttonSecondaryText}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.button} onPress={savePreviewPhoto}>
+              <Pressable
+                style={[styles.button, styles.previewActionButton]}
+                onPress={savePreviewPhoto}
+              >
                 <Text style={styles.buttonText}>Save</Text>
               </Pressable>
             </View>
@@ -727,6 +731,12 @@ const styles = StyleSheet.create({
   },
   previewActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: 12,
+  },
+  previewActionButton: {
+    flex: 1,
+    minHeight: 52,
+    justifyContent: "center",
+    paddingHorizontal: 14,
   },
 });
