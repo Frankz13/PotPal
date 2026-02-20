@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { normalizeCare } from '@/lib/care';
 import type { LocationFilter } from '@/lib/locations';
-import type { Unit } from '@/lib/models';
+import type { Unit, UnitPhoto } from '@/lib/models';
 
 const DATA_FILE = `${FileSystem.documentDirectory}units.json`;
 const PHOTOS_DIR = `${FileSystem.documentDirectory}unit-photos`;
@@ -30,12 +30,22 @@ export async function loadUnits(): Promise<Unit[]> {
       species: unit.species ?? '',
       notes: unit.notes,
       createdAt: unit.createdAt ?? new Date().toISOString(),
-      photos: unit.photos ?? [],
+      photos: (unit.photos ?? []).map((photo) => normalizePhoto(photo, unit.id ?? '')),
       care: normalizeCare(unit.care),
     }));
   } catch {
     return [];
   }
+}
+
+function normalizePhoto(photo: Partial<UnitPhoto>, unitId: string): UnitPhoto {
+  return {
+    id: photo.id ?? `${Date.now()}`,
+    unitId: photo.unitId ?? unitId,
+    path: photo.path ?? '',
+    createdAt: photo.createdAt ?? '',
+    createdAtISO: photo.createdAtISO ?? photo.createdAt ?? '',
+  };
 }
 
 export async function saveUnits(units: Unit[]): Promise<void> {

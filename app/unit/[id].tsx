@@ -243,11 +243,13 @@ export default function UnitDetailScreen() {
     }
 
     const persistentPath = await persistPhoto(pendingPhotoUri, unit.id);
+    const createdAtISO = new Date().toISOString();
     const photo: UnitPhoto = {
       id: `${Date.now()}`,
       unitId: unit.id,
       path: persistentPath,
-      createdAt: new Date().toISOString(),
+      createdAt: createdAtISO,
+      createdAtISO,
     };
 
     const nextUnit: Unit = {
@@ -270,6 +272,18 @@ export default function UnitDetailScreen() {
     }
 
     return new Date(lastDoneISO).toLocaleDateString();
+  };
+
+  const formatPhotoDate = (createdAtISO: string) => {
+    if (!createdAtISO) {
+      return "";
+    }
+
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(createdAtISO));
   };
 
   const scrollToInput = (input: TextInput | null) => {
@@ -396,12 +410,18 @@ export default function UnitDetailScreen() {
 
           <View style={styles.gallery}>
             {unit.photos.map((photo) => (
-              <Image
-                key={photo.id}
-                source={{ uri: ensureDisplayUri(photo.path) }}
-                style={styles.image}
-                contentFit="cover"
-              />
+              <View key={photo.id} style={styles.photoCard}>
+                <Image
+                  source={{ uri: ensureDisplayUri(photo.path) }}
+                  style={styles.image}
+                  contentFit="cover"
+                />
+                {photo.createdAtISO || photo.createdAt ? (
+                  <Text style={styles.photoDate}>
+                    {formatPhotoDate(photo.createdAtISO ?? photo.createdAt)}
+                  </Text>
+                ) : null}
+              </View>
             ))}
           </View>
 
@@ -572,10 +592,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   image: {
-    width: "48%",
+    width: "100%",
     aspectRatio: 1,
     borderRadius: 10,
     backgroundColor: "#e5e7eb",
+  },
+  photoCard: {
+    width: "48%",
+    gap: 4,
+  },
+  photoDate: {
+    fontSize: 12,
+    color: "#4b5563",
   },
   previewOverlay: {
     flex: 1,
