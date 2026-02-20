@@ -16,5 +16,6 @@ export type Unit = {
   notes?: string;
   createdAt: string;
   photos: UnitPhoto[];
+  coverPhotoId?: string;
   care: UnitCare;
 };

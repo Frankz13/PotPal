@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -116,6 +117,18 @@ export default function HomeScreen() {
     router.push({ pathname: '/round', params: { location: locationFilter } });
   }, [locationFilter, router]);
 
+  const getCoverPhoto = useCallback((unit: Unit) => {
+    if (unit.coverPhotoId) {
+      const cover = unit.photos.find((photo) => photo.id === unit.coverPhotoId);
+
+      if (cover) {
+        return cover;
+      }
+    }
+
+    return unit.photos[0];
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
@@ -179,14 +192,21 @@ export default function HomeScreen() {
               </Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <Pressable style={styles.card} onPress={() => router.push(`/unit/${item.id}`)}>
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardMeta}>Location: {item.location}</Text>
-              <Text style={styles.cardMeta}>Species: {item.species}</Text>
-              <Text style={styles.cardMeta}>{item.photos.length} foto</Text>
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            const coverPhoto = getCoverPhoto(item);
+
+            return (
+              <Pressable style={styles.card} onPress={() => router.push(`/unit/${item.id}`)}>
+                {coverPhoto ? (
+                  <Image source={{ uri: coverPhoto.path }} style={styles.cardCoverImage} contentFit="cover" />
+                ) : null}
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardMeta}>Location: {item.location}</Text>
+                <Text style={styles.cardMeta}>Species: {item.species}</Text>
+                <Text style={styles.cardMeta}>{item.photos.length} foto</Text>
+              </Pressable>
+            );
+          }}
         />
       </View>
     </SafeAreaView>
@@ -322,6 +342,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     gap: 4,
+  },
+  cardCoverImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 10,
+    backgroundColor: '#e5e7eb',
+    marginBottom: 8,
   },
   cardTitle: {
     fontWeight: '700',

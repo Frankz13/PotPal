@@ -6,6 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   Alert,
+  FlatList,
   findNodeHandle,
   KeyboardAvoidingView,
   Modal,
@@ -30,6 +31,7 @@ export default function UnitDetailScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const [unit, setUnit] = useState<Unit | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<UnitPhoto | null>(null);
   const [isEditingIntervals, setIsEditingIntervals] = useState(false);
   const [doneFeedbackTasks, setDoneFeedbackTasks] = useState<
     Partial<Record<CareTaskKey, boolean>>
@@ -255,6 +257,7 @@ export default function UnitDetailScreen() {
     const nextUnit: Unit = {
       ...unit,
       photos: [photo, ...unit.photos],
+      coverPhotoId: unit.coverPhotoId ?? photo.id,
     };
 
     await updateUnit(nextUnit);
@@ -285,6 +288,63 @@ export default function UnitDetailScreen() {
       year: "numeric",
     }).format(new Date(createdAtISO));
   };
+
+  const getCoverPhotoId = useCallback((targetUnit: Unit) => {
+    return targetUnit.coverPhotoId ?? targetUnit.photos[0]?.id;
+  }, []);
+
+  const setPhotoAsCover = useCallback(
+    async (photoId: string) => {
+      if (!unit) {
+        return;
+      }
+
+      const nextUnit: Unit = {
+        ...unit,
+        coverPhotoId: photoId,
+      };
+
+      await updateUnit(nextUnit);
+      setSelectedPhoto(nextUnit.photos.find((photo) => photo.id === photoId) ?? null);
+      await refreshUnit();
+    },
+    [refreshUnit, unit, updateUnit],
+  );
+
+  const deletePhoto = useCallback(
+    async (photo: UnitPhoto) => {
+      if (!unit) {
+        return;
+      }
+
+      const remainingPhotos = unit.photos.filter((item) => item.id !== photo.id);
+      const nextCoverPhotoId =
+        getCoverPhotoId(unit) === photo.id ? remainingPhotos[0]?.id : unit.coverPhotoId;
+
+      const nextUnit: Unit = {
+        ...unit,
+        photos: remainingPhotos,
+        coverPhotoId: nextCoverPhotoId,
+      };
+
+      await updateUnit(nextUnit);
+      setSelectedPhoto(null);
+
+      try {
+        if (photo.path.startsWith("/") || photo.path.startsWith("file://")) {
+          const deletablePath = photo.path.startsWith("/")
+            ? `file://${photo.path}`
+            : photo.path;
+          await FileSystem.deleteAsync(deletablePath, { idempotent: true });
+        }
+      } catch {
+        // best effort cleanup
+      }
+
+      await refreshUnit();
+    },
+    [getCoverPhotoId, refreshUnit, unit, updateUnit],
+  );
 
   const scrollToInput = (input: TextInput | null) => {
     const node = findNodeHandle(input);
@@ -401,29 +461,102 @@ export default function UnitDetailScreen() {
             </Pressable>
           </View>
 
-          <Text style={styles.galleryTitle}>
-            Galleria ({unit.photos.length})
-          </Text>
-          {unit.photos.length === 0 ? (
-            <Text style={styles.empty}>Nessuna foto caricata.</Text>
+          <Text style={styles.galleryTitle}>Galleria ({unit.photos.length})</Text>
+          {unit.photos.length === 0 ? <Text style={styles.empty}>Nessuna foto caricata.</Text> : null}
+
+          {unit.photos.length > 0 ? (
+            <FlatList
+              horizontal
+              data={unit.photos}
+              keyExtractor={(photo) => photo.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.galleryList}
+              renderItem={({ item: photo }) => {
+                const isCover = getCoverPhotoId(unit) === photo.id;
+                return (
+                  <Pressable
+                    style={styles.photoCard}
+                    onPress={() => setSelectedPhoto(photo)}
+                  >
+                    <Image
+                      source={{ uri: ensureDisplayUri(photo.path) }}
+                      style={styles.image}
+                      contentFit="cover"
+                    />
+                    {isCover ? (
+                      <View style={styles.mainBadge}>
+                        <Text style={styles.mainBadgeText}>Main</Text>
+                      </View>
+                    ) : null}
+                    {photo.createdAtISO || photo.createdAt ? (
+                      <Text style={styles.photoDate}>
+                        {formatPhotoDate(photo.createdAtISO ?? photo.createdAt)}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                );
+              }}
+            />
           ) : null}
 
-          <View style={styles.gallery}>
-            {unit.photos.map((photo) => (
-              <View key={photo.id} style={styles.photoCard}>
-                <Image
-                  source={{ uri: ensureDisplayUri(photo.path) }}
-                  style={styles.image}
-                  contentFit="cover"
-                />
-                {photo.createdAtISO || photo.createdAt ? (
-                  <Text style={styles.photoDate}>
-                    {formatPhotoDate(photo.createdAtISO ?? photo.createdAt)}
+          <Modal
+            visible={Boolean(selectedPhoto)}
+            animationType="slide"
+            onRequestClose={() => setSelectedPhoto(null)}
+          >
+            <SafeAreaView style={styles.viewerSafeArea} edges={["top", "bottom"]}>
+              <View style={styles.viewerContent}>
+                {selectedPhoto ? (
+                  <Image
+                    source={{ uri: ensureDisplayUri(selectedPhoto.path) }}
+                    style={styles.viewerImage}
+                    contentFit="contain"
+                  />
+                ) : null}
+                {selectedPhoto?.createdAtISO || selectedPhoto?.createdAt ? (
+                  <Text style={styles.viewerDate}>
+                    {formatPhotoDate(selectedPhoto?.createdAtISO ?? selectedPhoto?.createdAt ?? "")}
                   </Text>
                 ) : null}
               </View>
-            ))}
-          </View>
+
+              <View style={styles.viewerActions}>
+                <Pressable
+                  style={styles.viewerButtonSecondary}
+                  onPress={() => setSelectedPhoto(null)}
+                >
+                  <Text style={styles.buttonSecondaryText}>Close</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.viewerButtonSecondary}
+                  onPress={() => selectedPhoto && void setPhotoAsCover(selectedPhoto.id)}
+                >
+                  <Text style={styles.buttonSecondaryText}>Set as main</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.viewerDeleteButton}
+                  onPress={() => {
+                    if (!selectedPhoto) {
+                      return;
+                    }
+
+                    Alert.alert("Delete photo?", "This action cannot be undone.", [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: () => {
+                          void deletePhoto(selectedPhoto);
+                        },
+                      },
+                    ]);
+                  }}
+                >
+                  <Text style={styles.viewerDeleteButtonText}>Delete</Text>
+                </Pressable>
+              </View>
+            </SafeAreaView>
+          </Modal>
 
           <Modal
             visible={Boolean(pendingPhotoUri)}
@@ -586,24 +719,83 @@ const styles = StyleSheet.create({
   empty: {
     color: "#6b7280",
   },
-  gallery: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  galleryList: {
+    gap: 10,
+    paddingRight: 8,
   },
   image: {
-    width: "100%",
-    aspectRatio: 1,
+    width: 132,
+    height: 132,
     borderRadius: 10,
     backgroundColor: "#e5e7eb",
   },
   photoCard: {
-    width: "48%",
+    width: 132,
     gap: 4,
+  },
+  mainBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(45,122,70,0.95)",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  mainBadgeText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "700",
   },
   photoDate: {
     fontSize: 12,
     color: "#4b5563",
+  },
+  viewerSafeArea: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+  viewerContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 12,
+    gap: 10,
+  },
+  viewerImage: {
+    width: "100%",
+    height: "80%",
+    backgroundColor: "#111827",
+    borderRadius: 12,
+  },
+  viewerDate: {
+    color: "#e5e7eb",
+    fontSize: 14,
+  },
+  viewerActions: {
+    flexDirection: "row",
+    gap: 8,
+    padding: 12,
+  },
+  viewerButtonSecondary: {
+    flex: 1,
+    borderColor: "#2d7a46",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "white",
+  },
+  viewerDeleteButton: {
+    flex: 1,
+    backgroundColor: "#b91c1c",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  viewerDeleteButtonText: {
+    color: "white",
+    fontWeight: "700",
   },
   previewOverlay: {
     flex: 1,
