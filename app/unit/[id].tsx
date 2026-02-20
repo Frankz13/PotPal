@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -28,11 +28,13 @@ import { loadUnits, persistPhoto, saveUnits } from "@/lib/storage";
 export default function UnitDetailScreen() {
   const DONE_FEEDBACK_MS = 8000;
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const navigation = useNavigation();
   const scrollRef = useRef<ScrollView>(null);
   const viewerListRef = useRef<FlatList<UnitPhoto> | null>(null);
   const { width: windowWidth } = useWindowDimensions();
   const [unit, setUnit] = useState<Unit | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [isEditingIntervals, setIsEditingIntervals] = useState(false);
@@ -59,9 +61,15 @@ export default function UnitDetailScreen() {
   }, []);
 
   const refreshUnit = useCallback(async () => {
-    const units = await loadUnits();
-    const found = units.find((item) => item.id === id) ?? null;
-    setUnit(found);
+    setIsLoading(true);
+
+    try {
+      const units = await loadUnits();
+      const found = units.find((item) => item.id === id) ?? null;
+      setUnit(found);
+    } finally {
+      setIsLoading(false);
+    }
   }, [id]);
 
   useFocusEffect(
@@ -114,6 +122,7 @@ export default function UnitDetailScreen() {
     navigation.setOptions({
       title: unit?.name ?? "Unit detail",
       headerRight: () => (
+        isLoading || !unit ? null : (
         <Pressable
           onPress={() => {
             Alert.alert(
@@ -134,9 +143,10 @@ export default function UnitDetailScreen() {
         >
           <Text style={styles.deleteHeaderAction}>✕</Text>
         </Pressable>
+        )
       ),
     });
-  }, [deleteUnit, navigation, unit?.name]);
+  }, [deleteUnit, isLoading, navigation, unit, unit?.name]);
 
   const markCareDone = useCallback(
     async (taskKey: CareTaskKey) => {
@@ -353,17 +363,39 @@ export default function UnitDetailScreen() {
 
 
   useEffect(() => {
-    if (viewerIndex === null || !viewerListRef.current || unit.photos.length === 0) {
+    const photoCount = unit?.photos?.length ?? 0;
+
+    if (viewerIndex === null) {
+      return;
+    }
+
+    if (photoCount === 0) {
+      setViewerIndex(null);
+      return;
+    }
+
+    if (viewerIndex > photoCount - 1) {
+      setViewerIndex(photoCount - 1);
+      return;
+    }
+
+    if (viewerIndex < 0) {
+      setViewerIndex(0);
+      return;
+    }
+
+    if (!viewerListRef.current) {
       return;
     }
 
     viewerListRef.current.scrollToIndex({ index: viewerIndex, animated: false });
-  }, [unit.photos.length, viewerIndex]);
+  }, [unit?.photos?.length, viewerIndex]);
 
+  const unitPhotos = unit?.photos ?? [];
   const currentPhoto =
-    viewerIndex !== null ? unit.photos[viewerIndex] ?? null : null;
+    viewerIndex !== null ? unitPhotos[viewerIndex] ?? null : null;
   const isCurrentPhotoMain = currentPhoto
-    ? getCoverPhotoId(unit) === currentPhoto.id
+    ? unit !== null && getCoverPhotoId(unit) === currentPhoto.id
     : false;
 
   const scrollToInput = (input: TextInput | null) => {
@@ -378,10 +410,21 @@ export default function UnitDetailScreen() {
       ?.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
   };
 
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <Text>Loading unit...</Text>
+      </View>
+    );
+  }
+
   if (!unit) {
     return (
       <View style={styles.centered}>
-        <Text>Unit non trovata.</Text>
+        <Text style={styles.notFoundMessage}>This unit no longer exists.</Text>
+        <Pressable style={styles.button} onPress={() => router.replace("/")}>
+          <Text style={styles.buttonText}>Back to Home</Text>
+        </Pressable>
       </View>
     );
   }
@@ -481,13 +524,13 @@ export default function UnitDetailScreen() {
             </Pressable>
           </View>
 
-          <Text style={styles.galleryTitle}>Galleria ({unit.photos.length})</Text>
-          {unit.photos.length === 0 ? <Text style={styles.empty}>Nessuna foto caricata.</Text> : null}
+          <Text style={styles.galleryTitle}>Galleria ({unitPhotos.length})</Text>
+          {unitPhotos.length === 0 ? <Text style={styles.empty}>Nessuna foto caricata.</Text> : null}
 
-          {unit.photos.length > 0 ? (
+          {unitPhotos.length > 0 ? (
             <FlatList
               horizontal
-              data={unit.photos}
+              data={unitPhotos}
               keyExtractor={(photo) => photo.id}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.galleryList}
@@ -496,7 +539,11 @@ export default function UnitDetailScreen() {
                 return (
                   <Pressable
                     style={styles.photoCard}
-                    onPress={() => setViewerIndex(index)}
+                    onPress={() => {
+                      if (unitPhotos.length > 0) {
+                        setViewerIndex(index);
+                      }
+                    }}
                   >
                     <Image
                       source={{ uri: ensureDisplayUri(photo.path) }}
@@ -520,7 +567,7 @@ export default function UnitDetailScreen() {
           ) : null}
 
           <Modal
-            visible={viewerIndex !== null && unit.photos.length > 0}
+            visible={viewerIndex !== null && unitPhotos.length > 0}
             animationType="slide"
             onRequestClose={() => setViewerIndex(null)}
           >
@@ -531,7 +578,7 @@ export default function UnitDetailScreen() {
                     ref={viewerListRef}
                     horizontal
                     pagingEnabled
-                    data={unit.photos}
+                    data={unitPhotos}
                     initialScrollIndex={viewerIndex}
                     keyExtractor={(photo) => photo.id}
                     showsHorizontalScrollIndicator={false}
@@ -576,7 +623,7 @@ export default function UnitDetailScreen() {
                 ) : null}
                 {viewerIndex !== null ? (
                   <Text style={styles.viewerCounter}>
-                    {viewerIndex + 1} / {unit.photos.length}
+                    {viewerIndex + 1} / {unitPhotos.length}
                   </Text>
                 ) : null}
               </View>
@@ -680,6 +727,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  notFoundMessage: {
+    color: "#374151",
+    fontSize: 16,
   },
   name: {
     fontSize: 28,
