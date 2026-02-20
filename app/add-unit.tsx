@@ -2,8 +2,10 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  FlatList,
   findNodeHandle,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -27,14 +29,16 @@ type PresetOption = (typeof LOCATION_PRESETS)[number] | typeof CUSTOM_OPTION;
 export default function AddUnitScreen() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const speciesInputRef = useRef<TextInput>(null);
+  const speciesSearchInputRef = useRef<TextInput>(null);
   const notesInputRef = useRef<TextInput>(null);
+  const scrollRetryTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [name, setName] = useState("");
   const [locationOption, setLocationOption] = useState<PresetOption>("Veranda");
   const [customLocation, setCustomLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [species, setSpecies] = useState("");
-  const [showSpeciesSuggestions, setShowSpeciesSuggestions] = useState(false);
+  const [speciesModalVisible, setSpeciesModalVisible] = useState(false);
+  const [speciesSearchQuery, setSpeciesSearchQuery] = useState("");
 
   useEffect(() => {
     const hydrateLocationPreference = async () => {
@@ -67,9 +71,16 @@ export default function AddUnitScreen() {
   const selectedLocation =
     locationOption === CUSTOM_OPTION ? customLocation.trim() : locationOption;
 
-  const speciesSuggestions = showSpeciesSuggestions
-    ? filterSpeciesOptions(species).slice(0, 8)
-    : [];
+  const speciesSuggestions = filterSpeciesOptions(speciesSearchQuery).slice(0, 50);
+
+  useEffect(
+    () => () => {
+      scrollRetryTimeoutsRef.current.forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
+    },
+    [],
+  );
 
   const scrollToInput = (input: TextInput | null) => {
     const node = findNodeHandle(input);
@@ -80,8 +91,36 @@ export default function AddUnitScreen() {
 
     scrollRef.current
       ?.getScrollResponder()
-      ?.scrollResponderScrollNativeHandleToKeyboard(node, 96, true);
+      ?.scrollResponderScrollNativeHandleToKeyboard(node, 140, true);
   };
+
+  const scrollToInputWithRetries = (input: TextInput | null) => {
+    scrollToInput(input);
+
+    scrollRetryTimeoutsRef.current.forEach((timeoutId) => {
+      clearTimeout(timeoutId);
+    });
+
+    scrollRetryTimeoutsRef.current = [200, 400].map((delay) =>
+      setTimeout(() => {
+        scrollToInput(input);
+      }, delay),
+    );
+  };
+
+  const openSpeciesModal = () => {
+    setSpeciesSearchQuery(species);
+    setSpeciesModalVisible(true);
+    setTimeout(() => {
+      speciesSearchInputRef.current?.focus();
+    }, 0);
+  };
+
+  const closeSpeciesModal = () => {
+    setSpeciesModalVisible(false);
+  };
+
+  const customSpeciesLabel = speciesSearchQuery.trim();
 
   const onSave = async () => {
     if (!name.trim() || !selectedLocation) {
@@ -172,34 +211,13 @@ export default function AddUnitScreen() {
 
           <View style={styles.fieldWrap}>
             <Text style={styles.label}>Plant species</Text>
-            <TextInput
-              ref={speciesInputRef}
-              value={species}
-              onChangeText={(nextValue) => {
-                setSpecies(nextValue);
-                setShowSpeciesSuggestions(true);
-              }}
-              onFocus={() => scrollToInput(speciesInputRef.current)}
-              onBlur={() => setShowSpeciesSuggestions(false)}
-              style={styles.input}
-              placeholder="Es. Mint — Mentha spp."
-            />
-            {speciesSuggestions.length > 0 ? (
-              <View style={styles.suggestionList}>
-                {speciesSuggestions.map((option) => (
-                  <Pressable
-                    key={option.label}
-                    style={styles.suggestionItem}
-                    onPress={() => {
-                      setSpecies(option.label);
-                      setShowSpeciesSuggestions(false);
-                    }}
-                  >
-                    <Text style={styles.suggestionText}>{option.label}</Text>
-                  </Pressable>
-                ))}
+            <Pressable onPress={openSpeciesModal}>
+              <View pointerEvents="none" style={styles.input}>
+                <Text style={species ? styles.inputValue : styles.inputPlaceholder}>
+                  {species || "Es. Mint — Mentha spp."}
+                </Text>
               </View>
-            ) : null}
+            </Pressable>
           </View>
 
           <View style={styles.fieldWrap}>
@@ -208,7 +226,7 @@ export default function AddUnitScreen() {
               ref={notesInputRef}
               value={notes}
               onChangeText={setNotes}
-              onFocus={() => scrollToInput(notesInputRef.current)}
+              onFocus={() => scrollToInputWithRetries(notesInputRef.current)}
               style={[styles.input, styles.notesInput]}
               placeholder="Dettagli utili..."
               multiline
@@ -220,6 +238,61 @@ export default function AddUnitScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={speciesModalVisible}
+        animationType="slide"
+        onRequestClose={closeSpeciesModal}
+      >
+        <SafeAreaView style={styles.speciesModalSafeArea} edges={["top", "bottom"]}>
+          <View style={styles.speciesModalHeader}>
+            <Text style={styles.speciesModalTitle}>Search species</Text>
+            <TextInput
+              ref={speciesSearchInputRef}
+              value={speciesSearchQuery}
+              onChangeText={setSpeciesSearchQuery}
+              style={styles.input}
+              placeholder="Type species name"
+              autoFocus
+            />
+          </View>
+
+          <FlatList
+            data={speciesSuggestions}
+            keyExtractor={(item) => item.value}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.speciesListContent}
+            ListHeaderComponent={
+              customSpeciesLabel ? (
+                <Pressable
+                  style={styles.suggestionItem}
+                  onPress={() => {
+                    setSpecies(customSpeciesLabel);
+                    closeSpeciesModal();
+                  }}
+                >
+                  <Text style={styles.suggestionText}>Use: {customSpeciesLabel}</Text>
+                </Pressable>
+              ) : null
+            }
+            renderItem={({ item }) => (
+              <Pressable
+                style={styles.suggestionItem}
+                onPress={() => {
+                  setSpecies(item.label);
+                  closeSpeciesModal();
+                }}
+              >
+                <Text style={styles.suggestionText}>{item.label}</Text>
+              </Pressable>
+            )}
+          />
+
+          <Pressable style={styles.speciesModalCloseButton} onPress={closeSpeciesModal}>
+            <Text style={styles.speciesModalCloseButtonText}>Done</Text>
+          </Pressable>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -281,12 +354,11 @@ const styles = StyleSheet.create({
     color: "#2d7a46",
     fontWeight: "700",
   },
-  suggestionList: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    backgroundColor: "white",
-    overflow: "hidden",
+  inputPlaceholder: {
+    color: "#9ca3af",
+  },
+  inputValue: {
+    color: "#111827",
   },
   suggestionItem: {
     paddingHorizontal: 10,
@@ -295,6 +367,35 @@ const styles = StyleSheet.create({
     borderBottomColor: "#f3f4f6",
   },
   suggestionText: {
+    color: "#111827",
+  },
+  speciesModalSafeArea: {
+    flex: 1,
+    backgroundColor: "white",
+  },
+  speciesModalHeader: {
+    gap: 10,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  speciesModalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  speciesListContent: {
+    paddingBottom: 20,
+  },
+  speciesModalCloseButton: {
+    margin: 16,
+    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#f3f4f6",
+  },
+  speciesModalCloseButtonText: {
+    fontWeight: "600",
     color: "#111827",
   },
   notesInput: {
