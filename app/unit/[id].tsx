@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -15,6 +16,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CARE_TASK_LABELS, type CareTaskKey } from '@/lib/care';
 import type { Unit, UnitPhoto } from '@/lib/models';
@@ -265,13 +267,15 @@ export default function UnitDetailScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.name}>{unit.name}</Text>
-      <Text style={styles.meta}>Location: {unit.location}</Text>
-      <Text style={styles.meta}>Species: {unit.species}</Text>
-      {unit.notes ? <Text style={styles.meta}>Note: {unit.notes}</Text> : null}
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <Text style={styles.name}>{unit.name}</Text>
+          <Text style={styles.meta}>Location: {unit.location}</Text>
+          <Text style={styles.meta}>Species: {unit.species}</Text>
+          {unit.notes ? <Text style={styles.meta}>Note: {unit.notes}</Text> : null}
 
-      <View style={styles.careSection}>
+          <View style={styles.careSection}>
         <View style={styles.careHeader}>
           <Text style={styles.careTitle}>Care</Text>
           <Pressable style={styles.buttonSecondarySmall} onPress={() => setIsEditingIntervals((prev) => !prev)}>
@@ -306,56 +310,67 @@ export default function UnitDetailScreen() {
             </View>
           );
         })}
-      </View>
-
-      <View style={styles.buttonRow}>
-        <Pressable style={styles.button} onPress={addPhotoFromCamera}>
-          <Text style={styles.buttonText}>Scatta foto</Text>
-        </Pressable>
-        <Pressable style={styles.buttonSecondary} onPress={addPhotoFromLibrary}>
-          <Text style={styles.buttonSecondaryText}>Da libreria</Text>
-        </Pressable>
-      </View>
-
-      <Text style={styles.galleryTitle}>Galleria ({unit.photos.length})</Text>
-      {unit.photos.length === 0 ? <Text style={styles.empty}>Nessuna foto caricata.</Text> : null}
-
-      <View style={styles.gallery}>
-        {unit.photos.map((photo) => (
-          <Image
-            key={photo.id}
-            source={{ uri: ensureDisplayUri(photo.path) }}
-            style={styles.image}
-            contentFit="cover"
-          />
-        ))}
-      </View>
-
-      <Modal visible={Boolean(pendingPhotoUri)} transparent animationType="fade" onRequestClose={cancelPendingPhoto}>
-        <View style={styles.previewOverlay}>
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Anteprima foto</Text>
-            {pendingPhotoUri ? (
-              <Image source={{ uri: pendingPhotoUri }} style={styles.previewImage} contentFit="cover" />
-            ) : null}
-            <View style={styles.previewActions}>
-              <Pressable style={styles.buttonSecondary} onPress={cancelPendingPhoto}>
-                <Text style={styles.buttonSecondaryText}>Annulla</Text>
-              </Pressable>
-              <Pressable style={styles.button} onPress={addPhoto}>
-                <Text style={styles.buttonText}>Salva</Text>
-              </Pressable>
-            </View>
           </View>
-        </View>
-      </Modal>
-    </ScrollView>
+
+          <View style={styles.buttonRow}>
+            <Pressable style={styles.button} onPress={addPhotoFromCamera}>
+              <Text style={styles.buttonText}>Scatta foto</Text>
+            </Pressable>
+            <Pressable style={styles.buttonSecondary} onPress={addPhotoFromLibrary}>
+              <Text style={styles.buttonSecondaryText}>Da libreria</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.galleryTitle}>Galleria ({unit.photos.length})</Text>
+          {unit.photos.length === 0 ? <Text style={styles.empty}>Nessuna foto caricata.</Text> : null}
+
+          <View style={styles.gallery}>
+            {unit.photos.map((photo) => (
+              <Image
+                key={photo.id}
+                source={{ uri: ensureDisplayUri(photo.path) }}
+                style={styles.image}
+                contentFit="cover"
+              />
+            ))}
+          </View>
+
+          <Modal visible={Boolean(pendingPhotoUri)} transparent animationType="fade" onRequestClose={cancelPendingPhoto}>
+            <View style={styles.previewOverlay}>
+              <View style={styles.previewCard}>
+                <Text style={styles.previewTitle}>Anteprima foto</Text>
+                {pendingPhotoUri ? (
+                  <Image source={{ uri: pendingPhotoUri }} style={styles.previewImage} contentFit="cover" />
+                ) : null}
+                <View style={styles.previewActions}>
+                  <Pressable style={styles.buttonSecondary} onPress={cancelPendingPhoto}>
+                    <Text style={styles.buttonSecondaryText}>Annulla</Text>
+                  </Pressable>
+                  <Pressable style={styles.button} onPress={addPhoto}>
+                    <Text style={styles.buttonText}>Salva</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  keyboardAvoiding: {
+    flex: 1,
+  },
   container: {
+    flexGrow: 1,
     padding: 16,
+    paddingBottom: 32,
     gap: 10,
   },
   centered: {
