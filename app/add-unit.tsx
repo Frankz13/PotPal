@@ -1,7 +1,8 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  findNodeHandle,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,26 +11,29 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { createDefaultCare } from '@/lib/care';
-import { filterSpeciesOptions } from '@/lib/species';
-import { LOCATION_PRESETS } from '@/lib/locations';
-import type { Unit } from '@/lib/models';
-import { loadUnits, saveUnits } from '@/lib/storage';
+import { createDefaultCare } from "@/lib/care";
+import { filterSpeciesOptions } from "@/lib/species";
+import { LOCATION_PRESETS } from "@/lib/locations";
+import type { Unit } from "@/lib/models";
+import { loadUnits, saveUnits } from "@/lib/storage";
 
-const CUSTOM_OPTION = 'Custom...';
+const CUSTOM_OPTION = "Custom...";
 
 type PresetOption = (typeof LOCATION_PRESETS)[number] | typeof CUSTOM_OPTION;
 
 export default function AddUnitScreen() {
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [locationOption, setLocationOption] = useState<PresetOption>('Veranda');
-  const [customLocation, setCustomLocation] = useState('');
-  const [notes, setNotes] = useState('');
-  const [species, setSpecies] = useState('');
+  const scrollRef = useRef<ScrollView>(null);
+  const speciesInputRef = useRef<TextInput>(null);
+  const notesInputRef = useRef<TextInput>(null);
+  const [name, setName] = useState("");
+  const [locationOption, setLocationOption] = useState<PresetOption>("Veranda");
+  const [customLocation, setCustomLocation] = useState("");
+  const [notes, setNotes] = useState("");
+  const [species, setSpecies] = useState("");
   const [showSpeciesSuggestions, setShowSpeciesSuggestions] = useState(false);
 
   useEffect(() => {
@@ -41,9 +45,15 @@ export default function AddUnitScreen() {
         return;
       }
 
-      if (LOCATION_PRESETS.includes(lastUsedLocation as (typeof LOCATION_PRESETS)[number])) {
-        setLocationOption(lastUsedLocation as (typeof LOCATION_PRESETS)[number]);
-        setCustomLocation('');
+      if (
+        LOCATION_PRESETS.includes(
+          lastUsedLocation as (typeof LOCATION_PRESETS)[number],
+        )
+      ) {
+        setLocationOption(
+          lastUsedLocation as (typeof LOCATION_PRESETS)[number],
+        );
+        setCustomLocation("");
         return;
       }
 
@@ -54,15 +64,31 @@ export default function AddUnitScreen() {
     void hydrateLocationPreference();
   }, []);
 
-  const selectedLocation = locationOption === CUSTOM_OPTION ? customLocation.trim() : locationOption;
+  const selectedLocation =
+    locationOption === CUSTOM_OPTION ? customLocation.trim() : locationOption;
 
   const speciesSuggestions = showSpeciesSuggestions
     ? filterSpeciesOptions(species).slice(0, 8)
     : [];
 
+  const scrollToInput = (input: TextInput | null) => {
+    const node = findNodeHandle(input);
+
+    if (!node) {
+      return;
+    }
+
+    scrollRef.current
+      ?.getScrollResponder()
+      ?.scrollResponderScrollNativeHandleToKeyboard(node, 96, true);
+  };
+
   const onSave = async () => {
     if (!name.trim() || !selectedLocation) {
-      Alert.alert('Campi obbligatori', 'Inserisci almeno nome e posizione della unit.');
+      Alert.alert(
+        "Campi obbligatori",
+        "Inserisci almeno nome e posizione della unit.",
+      );
       return;
     }
 
@@ -84,82 +110,110 @@ export default function AddUnitScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           <Text style={styles.title}>Add Unit</Text>
 
-        <View style={styles.fieldWrap}>
-          <Text style={styles.label}>Name *</Text>
-          <TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Es. Pomodori" />
-        </View>
-
-        <View style={styles.fieldWrap}>
-          <Text style={styles.label}>Location *</Text>
-          <View style={styles.presetWrap}>
-            {[...LOCATION_PRESETS, CUSTOM_OPTION].map((option) => {
-              const isSelected = locationOption === option;
-
-              return (
-                <Pressable
-                  key={option}
-                  style={[styles.presetButton, isSelected && styles.presetButtonSelected]}
-                  onPress={() => setLocationOption(option)}>
-                  <Text style={[styles.presetButtonText, isSelected && styles.presetButtonTextSelected]}>{option}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {locationOption === CUSTOM_OPTION ? (
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Name *</Text>
             <TextInput
-              value={customLocation}
-              onChangeText={setCustomLocation}
+              value={name}
+              onChangeText={setName}
               style={styles.input}
-              placeholder="Inserisci posizione personalizzata"
+              placeholder="Es. Pomodori"
             />
-          ) : null}
-        </View>
+          </View>
 
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Location *</Text>
+            <View style={styles.presetWrap}>
+              {[...LOCATION_PRESETS, CUSTOM_OPTION].map((option) => {
+                const isSelected = locationOption === option;
 
-        <View style={styles.fieldWrap}>
-          <Text style={styles.label}>Plant species</Text>
-          <TextInput
-            value={species}
-            onChangeText={(nextValue) => {
-              setSpecies(nextValue);
-              setShowSpeciesSuggestions(true);
-            }}
-            onBlur={() => setShowSpeciesSuggestions(false)}
-            style={styles.input}
-            placeholder="Es. Mint — Mentha spp."
-          />
-          {speciesSuggestions.length > 0 ? (
-            <View style={styles.suggestionList}>
-              {speciesSuggestions.map((option) => (
-                <Pressable
-                  key={option.label}
-                  style={styles.suggestionItem}
-                  onPress={() => {
-                    setSpecies(option.label);
-                    setShowSpeciesSuggestions(false);
-                  }}>
-                  <Text style={styles.suggestionText}>{option.label}</Text>
-                </Pressable>
-              ))}
+                return (
+                  <Pressable
+                    key={option}
+                    style={[
+                      styles.presetButton,
+                      isSelected && styles.presetButtonSelected,
+                    ]}
+                    onPress={() => setLocationOption(option)}
+                  >
+                    <Text
+                      style={[
+                        styles.presetButtonText,
+                        isSelected && styles.presetButtonTextSelected,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          ) : null}
-        </View>
+            {locationOption === CUSTOM_OPTION ? (
+              <TextInput
+                value={customLocation}
+                onChangeText={setCustomLocation}
+                style={styles.input}
+                placeholder="Inserisci posizione personalizzata"
+              />
+            ) : null}
+          </View>
 
-        <View style={styles.fieldWrap}>
-          <Text style={styles.label}>Notes (opzionale)</Text>
-          <TextInput
-            value={notes}
-            onChangeText={setNotes}
-            style={[styles.input, styles.notesInput]}
-            placeholder="Dettagli utili..."
-            multiline
-          />
-        </View>
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Plant species</Text>
+            <TextInput
+              ref={speciesInputRef}
+              value={species}
+              onChangeText={(nextValue) => {
+                setSpecies(nextValue);
+                setShowSpeciesSuggestions(true);
+              }}
+              onFocus={() => scrollToInput(speciesInputRef.current)}
+              onBlur={() => setShowSpeciesSuggestions(false)}
+              style={styles.input}
+              placeholder="Es. Mint — Mentha spp."
+            />
+            {speciesSuggestions.length > 0 ? (
+              <View style={styles.suggestionList}>
+                {speciesSuggestions.map((option) => (
+                  <Pressable
+                    key={option.label}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      setSpecies(option.label);
+                      setShowSpeciesSuggestions(false);
+                    }}
+                  >
+                    <Text style={styles.suggestionText}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Notes (opzionale)</Text>
+            <TextInput
+              ref={notesInputRef}
+              value={notes}
+              onChangeText={setNotes}
+              onFocus={() => scrollToInput(notesInputRef.current)}
+              style={[styles.input, styles.notesInput]}
+              placeholder="Dettagli utili..."
+              multiline
+            />
+          </View>
 
           <Pressable style={styles.button} onPress={onSave}>
             <Text style={styles.buttonText}>Salva Unit</Text>
@@ -173,7 +227,7 @@ export default function AddUnitScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: "white",
   },
   keyboardAvoiding: {
     flex: 1,
@@ -182,79 +236,79 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 16,
     paddingTop: 12,
-    paddingBottom: 32,
+    paddingBottom: 96,
     gap: 16,
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   fieldWrap: {
     gap: 6,
   },
   label: {
-    fontWeight: '600',
+    fontWeight: "600",
   },
   input: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 10,
     padding: 10,
-    backgroundColor: 'white',
+    backgroundColor: "white",
   },
   presetWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   presetButton: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: 'white',
+    backgroundColor: "white",
   },
   presetButtonSelected: {
-    borderColor: '#2d7a46',
-    backgroundColor: '#ecfdf3',
+    borderColor: "#2d7a46",
+    backgroundColor: "#ecfdf3",
   },
   presetButtonText: {
-    color: '#374151',
-    fontWeight: '500',
+    color: "#374151",
+    fontWeight: "500",
   },
   presetButtonTextSelected: {
-    color: '#2d7a46',
-    fontWeight: '700',
+    color: "#2d7a46",
+    fontWeight: "700",
   },
   suggestionList: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 10,
-    backgroundColor: 'white',
-    overflow: 'hidden',
+    backgroundColor: "white",
+    overflow: "hidden",
   },
   suggestionItem: {
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: "#f3f4f6",
   },
   suggestionText: {
-    color: '#111827',
+    color: "#111827",
   },
   notesInput: {
     minHeight: 80,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   button: {
-    backgroundColor: '#2d7a46',
+    backgroundColor: "#2d7a46",
     borderRadius: 12,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buttonText: {
-    color: 'white',
-    fontWeight: '700',
+    color: "white",
+    fontWeight: "700",
   },
 });
