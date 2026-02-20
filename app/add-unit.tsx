@@ -4,6 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createDefaultCare } from '@/lib/care';
+import { filterSpeciesOptions } from '@/lib/species';
 import { LOCATION_PRESETS } from '@/lib/locations';
 import type { Unit } from '@/lib/models';
 import { loadUnits, saveUnits } from '@/lib/storage';
@@ -18,6 +19,8 @@ export default function AddUnitScreen() {
   const [locationOption, setLocationOption] = useState<PresetOption>('Veranda');
   const [customLocation, setCustomLocation] = useState('');
   const [notes, setNotes] = useState('');
+  const [species, setSpecies] = useState('');
+  const [showSpeciesSuggestions, setShowSpeciesSuggestions] = useState(false);
 
   useEffect(() => {
     const hydrateLocationPreference = async () => {
@@ -43,6 +46,10 @@ export default function AddUnitScreen() {
 
   const selectedLocation = locationOption === CUSTOM_OPTION ? customLocation.trim() : locationOption;
 
+  const speciesSuggestions = showSpeciesSuggestions
+    ? filterSpeciesOptions(species).slice(0, 8)
+    : [];
+
   const onSave = async () => {
     if (!name.trim() || !selectedLocation) {
       Alert.alert('Campi obbligatori', 'Inserisci almeno nome e posizione della unit.');
@@ -55,6 +62,7 @@ export default function AddUnitScreen() {
       id: `${Date.now()}`,
       name: name.trim(),
       location: selectedLocation,
+      species: species.trim(),
       notes: notes.trim() || undefined,
       createdAt: new Date().toISOString(),
       photos: [],
@@ -67,7 +75,7 @@ export default function AddUnitScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Add Unit</Text>
 
         <View style={styles.fieldWrap}>
@@ -98,6 +106,36 @@ export default function AddUnitScreen() {
               style={styles.input}
               placeholder="Inserisci posizione personalizzata"
             />
+          ) : null}
+        </View>
+
+
+        <View style={styles.fieldWrap}>
+          <Text style={styles.label}>Plant species</Text>
+          <TextInput
+            value={species}
+            onChangeText={(nextValue) => {
+              setSpecies(nextValue);
+              setShowSpeciesSuggestions(true);
+            }}
+            onBlur={() => setShowSpeciesSuggestions(false)}
+            style={styles.input}
+            placeholder="Es. Mint — Mentha spp."
+          />
+          {speciesSuggestions.length > 0 ? (
+            <View style={styles.suggestionList}>
+              {speciesSuggestions.map((option) => (
+                <Pressable
+                  key={option.label}
+                  style={styles.suggestionItem}
+                  onPress={() => {
+                    setSpecies(option.label);
+                    setShowSpeciesSuggestions(false);
+                  }}>
+                  <Text style={styles.suggestionText}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
           ) : null}
         </View>
 
@@ -171,6 +209,22 @@ const styles = StyleSheet.create({
   presetButtonTextSelected: {
     color: '#2d7a46',
     fontWeight: '700',
+  },
+  suggestionList: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    backgroundColor: 'white',
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  suggestionText: {
+    color: '#111827',
   },
   notesInput: {
     minHeight: 80,

@@ -10,6 +10,7 @@ export type UnitPhoto = {
 export type Unit = {
   id: string;
   name: string;
+  species: string;
   location: string;
   notes?: string;
   createdAt: string;

@@ -27,6 +27,7 @@ export async function loadUnits(): Promise<Unit[]> {
       id: unit.id ?? `${Date.now()}`,
       name: unit.name ?? '',
       location: unit.location ?? '',
+      species: unit.species ?? '',
       notes: unit.notes,
       createdAt: unit.createdAt ?? new Date().toISOString(),
       photos: unit.photos ?? [],
