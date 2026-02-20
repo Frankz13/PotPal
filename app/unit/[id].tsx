@@ -1,11 +1,12 @@
-import { Image } from 'expo-image';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { Image } from "expo-image";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useNavigation } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   Alert,
+  findNodeHandle,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,29 +16,37 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { CARE_TASK_LABELS, type CareTaskKey } from '@/lib/care';
-import type { Unit, UnitPhoto } from '@/lib/models';
-import { loadUnits, persistPhoto, saveUnits } from '@/lib/storage';
+import { CARE_TASK_LABELS, type CareTaskKey } from "@/lib/care";
+import type { Unit, UnitPhoto } from "@/lib/models";
+import { loadUnits, persistPhoto, saveUnits } from "@/lib/storage";
 
 export default function UnitDetailScreen() {
   const DONE_FEEDBACK_MS = 8000;
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
+  const scrollRef = useRef<ScrollView>(null);
   const [unit, setUnit] = useState<Unit | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
   const [isEditingIntervals, setIsEditingIntervals] = useState(false);
-  const [doneFeedbackTasks, setDoneFeedbackTasks] = useState<Partial<Record<CareTaskKey, boolean>>>({});
-  const doneFeedbackTimersRef = useRef<Partial<Record<CareTaskKey, ReturnType<typeof setTimeout>>>>({});
+  const [doneFeedbackTasks, setDoneFeedbackTasks] = useState<
+    Partial<Record<CareTaskKey, boolean>>
+  >({});
+  const doneFeedbackTimersRef = useRef<
+    Partial<Record<CareTaskKey, ReturnType<typeof setTimeout>>>
+  >({});
+  const intervalInputRefs = useRef<
+    Partial<Record<CareTaskKey, TextInput | null>>
+  >({});
 
   const ensureDisplayUri = useCallback((path: string) => {
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(path)) {
       return path;
     }
 
-    if (Platform.OS !== 'web' && path.startsWith('/')) {
+    if (Platform.OS !== "web" && path.startsWith("/")) {
       return `file://${path}`;
     }
 
@@ -65,15 +74,14 @@ export default function UnitDetailScreen() {
     }, [refreshUnit]),
   );
 
-  const updateUnit = useCallback(
-    async (nextUnit: Unit) => {
-      setUnit(nextUnit);
-      const units = await loadUnits();
-      const updatedUnits = units.map((item) => (item.id === nextUnit.id ? nextUnit : item));
-      await saveUnits(updatedUnits);
-    },
-    [],
-  );
+  const updateUnit = useCallback(async (nextUnit: Unit) => {
+    setUnit(nextUnit);
+    const units = await loadUnits();
+    const updatedUnits = units.map((item) =>
+      item.id === nextUnit.id ? nextUnit : item,
+    );
+    await saveUnits(updatedUnits);
+  }, []);
 
   const deleteUnit = useCallback(async () => {
     if (!unit) {
@@ -94,26 +102,31 @@ export default function UnitDetailScreen() {
     );
 
     await saveUnits(nextUnits);
-    navigation.navigate('index' as never);
+    navigation.navigate("index" as never);
   }, [navigation, unit]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: unit?.name ?? 'Unit detail',
+      title: unit?.name ?? "Unit detail",
       headerRight: () => (
         <Pressable
           onPress={() => {
-            Alert.alert('Delete unit?', 'This will remove the unit and its photos.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () => {
-                  void deleteUnit();
+            Alert.alert(
+              "Delete unit?",
+              "This will remove the unit and its photos.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Delete",
+                  style: "destructive",
+                  onPress: () => {
+                    void deleteUnit();
+                  },
                 },
-              },
-            ]);
-          }}>
+              ],
+            );
+          }}
+        >
           <Text style={styles.deleteHeaderAction}>✕</Text>
         </Pressable>
       ),
@@ -159,7 +172,8 @@ export default function UnitDetailScreen() {
       }
 
       const parsed = Number(rawValue);
-      const intervalDays = Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 1;
+      const intervalDays =
+        Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 1;
       const nextUnit: Unit = {
         ...unit,
         care: {
@@ -181,14 +195,14 @@ export default function UnitDetailScreen() {
 
     if (!permission.granted) {
       Alert.alert(
-        'Permesso camera richiesto',
-        'Per scattare una foto, abilita l\'accesso alla camera dalle impostazioni.',
+        "Permesso camera richiesto",
+        "Per scattare una foto, abilita l'accesso alla camera dalle impostazioni.",
       );
       return;
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ["images"],
       quality: 0.8,
     });
 
@@ -202,14 +216,14 @@ export default function UnitDetailScreen() {
 
     if (!permission.granted) {
       Alert.alert(
-        'Permesso libreria richiesto',
-        'Per scegliere una foto, abilita l\'accesso alla libreria dalle impostazioni.',
+        "Permesso libreria richiesto",
+        "Per scegliere una foto, abilita l'accesso alla libreria dalle impostazioni.",
       );
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ["images"],
       quality: 0.8,
       allowsMultipleSelection: false,
     });
@@ -252,10 +266,22 @@ export default function UnitDetailScreen() {
 
   const formatLastDone = (lastDoneISO: string | null) => {
     if (!lastDoneISO) {
-      return 'Never';
+      return "Never";
     }
 
     return new Date(lastDoneISO).toLocaleDateString();
+  };
+
+  const scrollToInput = (input: TextInput | null) => {
+    const node = findNodeHandle(input);
+
+    if (!node) {
+      return;
+    }
+
+    scrollRef.current
+      ?.getScrollResponder()
+      ?.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
   };
 
   if (!unit) {
@@ -267,62 +293,106 @@ export default function UnitDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           <Text style={styles.name}>{unit.name}</Text>
           <Text style={styles.meta}>Location: {unit.location}</Text>
           <Text style={styles.meta}>Species: {unit.species}</Text>
-          {unit.notes ? <Text style={styles.meta}>Note: {unit.notes}</Text> : null}
+          {unit.notes ? (
+            <Text style={styles.meta}>Note: {unit.notes}</Text>
+          ) : null}
 
           <View style={styles.careSection}>
-        <View style={styles.careHeader}>
-          <Text style={styles.careTitle}>Care</Text>
-          <Pressable style={styles.buttonSecondarySmall} onPress={() => setIsEditingIntervals((prev) => !prev)}>
-            <Text style={styles.buttonSecondaryText}>{isEditingIntervals ? 'Done editing' : 'Edit intervals'}</Text>
-          </Pressable>
-        </View>
-
-        {(Object.keys(unit.care) as CareTaskKey[]).map((taskKey) => {
-          const task = unit.care[taskKey];
-          const isDoneFeedbackVisible = Boolean(doneFeedbackTasks[taskKey]);
-          return (
-            <View key={taskKey} style={styles.careRow}>
-              <View style={styles.careInfo}>
-                <Text style={styles.careLabel}>{CARE_TASK_LABELS[taskKey]}</Text>
-                <Text style={styles.careMeta}>every {task.intervalDays} days</Text>
-                <Text style={styles.careMeta}>last done: {formatLastDone(task.lastDoneISO)}</Text>
-                {isEditingIntervals ? (
-                  <TextInput
-                    defaultValue={`${task.intervalDays}`}
-                    keyboardType="number-pad"
-                    style={styles.intervalInput}
-                    onEndEditing={(event) => void updateInterval(taskKey, event.nativeEvent.text)}
-                  />
-                ) : null}
-              </View>
+            <View style={styles.careHeader}>
+              <Text style={styles.careTitle}>Care</Text>
               <Pressable
-                style={[styles.button, isDoneFeedbackVisible ? styles.buttonDisabled : null]}
-                disabled={isDoneFeedbackVisible}
-                onPress={() => void markCareDone(taskKey)}>
-                <Text style={styles.buttonText}>{isDoneFeedbackVisible ? 'Done ✓' : 'Done'}</Text>
+                style={styles.buttonSecondarySmall}
+                onPress={() => setIsEditingIntervals((prev) => !prev)}
+              >
+                <Text style={styles.buttonSecondaryText}>
+                  {isEditingIntervals ? "Done editing" : "Edit intervals"}
+                </Text>
               </Pressable>
             </View>
-          );
-        })}
+
+            {(Object.keys(unit.care) as CareTaskKey[]).map((taskKey) => {
+              const task = unit.care[taskKey];
+              const isDoneFeedbackVisible = Boolean(doneFeedbackTasks[taskKey]);
+              return (
+                <View key={taskKey} style={styles.careRow}>
+                  <View style={styles.careInfo}>
+                    <Text style={styles.careLabel}>
+                      {CARE_TASK_LABELS[taskKey]}
+                    </Text>
+                    <Text style={styles.careMeta}>
+                      every {task.intervalDays} days
+                    </Text>
+                    <Text style={styles.careMeta}>
+                      last done: {formatLastDone(task.lastDoneISO)}
+                    </Text>
+                    {isEditingIntervals ? (
+                      <TextInput
+                        ref={(input) => {
+                          intervalInputRefs.current[taskKey] = input;
+                        }}
+                        defaultValue={`${task.intervalDays}`}
+                        keyboardType="number-pad"
+                        style={styles.intervalInput}
+                        onFocus={() =>
+                          scrollToInput(
+                            intervalInputRefs.current[taskKey] ?? null,
+                          )
+                        }
+                        onEndEditing={(event) =>
+                          void updateInterval(taskKey, event.nativeEvent.text)
+                        }
+                      />
+                    ) : null}
+                  </View>
+                  <Pressable
+                    style={[
+                      styles.button,
+                      isDoneFeedbackVisible ? styles.buttonDisabled : null,
+                    ]}
+                    disabled={isDoneFeedbackVisible}
+                    onPress={() => void markCareDone(taskKey)}
+                  >
+                    <Text style={styles.buttonText}>
+                      {isDoneFeedbackVisible ? "Done ✓" : "Done"}
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })}
           </View>
 
           <View style={styles.buttonRow}>
             <Pressable style={styles.button} onPress={addPhotoFromCamera}>
               <Text style={styles.buttonText}>Scatta foto</Text>
             </Pressable>
-            <Pressable style={styles.buttonSecondary} onPress={addPhotoFromLibrary}>
+            <Pressable
+              style={styles.buttonSecondary}
+              onPress={addPhotoFromLibrary}
+            >
               <Text style={styles.buttonSecondaryText}>Da libreria</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.galleryTitle}>Galleria ({unit.photos.length})</Text>
-          {unit.photos.length === 0 ? <Text style={styles.empty}>Nessuna foto caricata.</Text> : null}
+          <Text style={styles.galleryTitle}>
+            Galleria ({unit.photos.length})
+          </Text>
+          {unit.photos.length === 0 ? (
+            <Text style={styles.empty}>Nessuna foto caricata.</Text>
+          ) : null}
 
           <View style={styles.gallery}>
             {unit.photos.map((photo) => (
@@ -335,15 +405,27 @@ export default function UnitDetailScreen() {
             ))}
           </View>
 
-          <Modal visible={Boolean(pendingPhotoUri)} transparent animationType="fade" onRequestClose={cancelPendingPhoto}>
+          <Modal
+            visible={Boolean(pendingPhotoUri)}
+            transparent
+            animationType="fade"
+            onRequestClose={cancelPendingPhoto}
+          >
             <View style={styles.previewOverlay}>
               <View style={styles.previewCard}>
                 <Text style={styles.previewTitle}>Anteprima foto</Text>
                 {pendingPhotoUri ? (
-                  <Image source={{ uri: pendingPhotoUri }} style={styles.previewImage} contentFit="cover" />
+                  <Image
+                    source={{ uri: pendingPhotoUri }}
+                    style={styles.previewImage}
+                    contentFit="cover"
+                  />
                 ) : null}
                 <View style={styles.previewActions}>
-                  <Pressable style={styles.buttonSecondary} onPress={cancelPendingPhoto}>
+                  <Pressable
+                    style={styles.buttonSecondary}
+                    onPress={cancelPendingPhoto}
+                  >
                     <Text style={styles.buttonSecondaryText}>Annulla</Text>
                   </Pressable>
                   <Pressable style={styles.button} onPress={addPhoto}>
@@ -362,7 +444,7 @@ export default function UnitDetailScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: "white",
   },
   keyboardAvoiding: {
     flex: 1,
@@ -370,158 +452,158 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 96,
     gap: 10,
   },
   centered: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   name: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   meta: {
-    color: '#374151',
+    color: "#374151",
   },
   careSection: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 12,
     padding: 12,
     gap: 8,
     marginTop: 10,
   },
   careHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 10,
   },
   careTitle: {
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 20,
   },
   careRow: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: "#e5e7eb",
     borderRadius: 10,
     padding: 10,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   careInfo: {
     flex: 1,
     gap: 2,
   },
   careLabel: {
-    fontWeight: '600',
+    fontWeight: "600",
   },
   careMeta: {
-    color: '#4b5563',
+    color: "#4b5563",
   },
   intervalInput: {
     marginTop: 6,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
     width: 120,
   },
   buttonRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginTop: 8,
   },
   button: {
     flex: 1,
-    backgroundColor: '#2d7a46',
+    backgroundColor: "#2d7a46",
     borderRadius: 12,
     paddingVertical: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buttonDisabled: {
     opacity: 0.65,
   },
   buttonSecondary: {
     flex: 1,
-    borderColor: '#2d7a46',
+    borderColor: "#2d7a46",
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buttonSecondarySmall: {
-    borderColor: '#2d7a46',
+    borderColor: "#2d7a46",
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   buttonText: {
-    color: 'white',
-    fontWeight: '600',
+    color: "white",
+    fontWeight: "600",
   },
   buttonSecondaryText: {
-    color: '#2d7a46',
-    fontWeight: '600',
+    color: "#2d7a46",
+    fontWeight: "600",
   },
   deleteHeaderAction: {
-    color: '#b91c1c',
+    color: "#b91c1c",
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
     paddingHorizontal: 8,
   },
   galleryTitle: {
     marginTop: 12,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 18,
   },
   empty: {
-    color: '#6b7280',
+    color: "#6b7280",
   },
   gallery: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   image: {
-    width: '48%',
+    width: "48%",
     aspectRatio: 1,
     borderRadius: 10,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: "#e5e7eb",
   },
   previewOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
   },
   previewCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 420,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 12,
     padding: 12,
     gap: 12,
   },
   previewTitle: {
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 16,
   },
   previewImage: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 1,
     borderRadius: 10,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: "#e5e7eb",
   },
   previewActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
 });
