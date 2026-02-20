@@ -1,6 +1,16 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createDefaultCare } from '@/lib/care';
@@ -75,8 +85,9 @@ export default function AddUnitScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Add Unit</Text>
+      <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <Text style={styles.title}>Add Unit</Text>
 
         <View style={styles.fieldWrap}>
           <Text style={styles.label}>Name *</Text>
@@ -150,10 +161,11 @@ export default function AddUnitScreen() {
           />
         </View>
 
-        <Pressable style={styles.button} onPress={onSave}>
-          <Text style={styles.buttonText}>Salva Unit</Text>
-        </Pressable>
-      </ScrollView>
+          <Pressable style={styles.button} onPress={onSave}>
+            <Text style={styles.buttonText}>Salva Unit</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -163,9 +175,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
+  keyboardAvoiding: {
+    flex: 1,
+  },
   container: {
+    flexGrow: 1,
     padding: 16,
     paddingTop: 12,
+    paddingBottom: 32,
     gap: 16,
   },
   title: {
