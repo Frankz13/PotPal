@@ -268,6 +268,7 @@ export default function UnitDetailScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.name}>{unit.name}</Text>
       <Text style={styles.meta}>Location: {unit.location}</Text>
+      <Text style={styles.meta}>Species: {unit.species}</Text>
       {unit.notes ? <Text style={styles.meta}>Note: {unit.notes}</Text> : null}
 
       <View style={styles.careSection}>
