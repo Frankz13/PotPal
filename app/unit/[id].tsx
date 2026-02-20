@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -16,6 +16,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,9 +30,11 @@ export default function UnitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const scrollRef = useRef<ScrollView>(null);
+  const viewerListRef = useRef<FlatList<UnitPhoto> | null>(null);
+  const { width: windowWidth } = useWindowDimensions();
   const [unit, setUnit] = useState<Unit | null>(null);
   const [pendingPhotoUri, setPendingPhotoUri] = useState<string | null>(null);
-  const [selectedPhoto, setSelectedPhoto] = useState<UnitPhoto | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [isEditingIntervals, setIsEditingIntervals] = useState(false);
   const [doneFeedbackTasks, setDoneFeedbackTasks] = useState<
     Partial<Record<CareTaskKey, boolean>>
@@ -305,14 +308,12 @@ export default function UnitDetailScreen() {
       };
 
       await updateUnit(nextUnit);
-      setSelectedPhoto(nextUnit.photos.find((photo) => photo.id === photoId) ?? null);
-      await refreshUnit();
     },
-    [refreshUnit, unit, updateUnit],
+    [unit, updateUnit],
   );
 
   const deletePhoto = useCallback(
-    async (photo: UnitPhoto) => {
+    async (photo: UnitPhoto, currentIndex: number) => {
       if (!unit) {
         return;
       }
@@ -328,7 +329,12 @@ export default function UnitDetailScreen() {
       };
 
       await updateUnit(nextUnit);
-      setSelectedPhoto(null);
+      if (remainingPhotos.length === 0) {
+        setViewerIndex(null);
+      } else {
+        const nextIndex = Math.min(currentIndex, remainingPhotos.length - 1);
+        setViewerIndex(nextIndex);
+      }
 
       try {
         if (photo.path.startsWith("/") || photo.path.startsWith("file://")) {
@@ -340,11 +346,25 @@ export default function UnitDetailScreen() {
       } catch {
         // best effort cleanup
       }
-
-      await refreshUnit();
     },
-    [getCoverPhotoId, refreshUnit, unit, updateUnit],
+    [getCoverPhotoId, unit, updateUnit],
   );
+
+
+
+  useEffect(() => {
+    if (viewerIndex === null || !viewerListRef.current || unit.photos.length === 0) {
+      return;
+    }
+
+    viewerListRef.current.scrollToIndex({ index: viewerIndex, animated: false });
+  }, [unit.photos.length, viewerIndex]);
+
+  const currentPhoto =
+    viewerIndex !== null ? unit.photos[viewerIndex] ?? null : null;
+  const isCurrentPhotoMain = currentPhoto
+    ? getCoverPhotoId(unit) === currentPhoto.id
+    : false;
 
   const scrollToInput = (input: TextInput | null) => {
     const node = findNodeHandle(input);
@@ -471,12 +491,12 @@ export default function UnitDetailScreen() {
               keyExtractor={(photo) => photo.id}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.galleryList}
-              renderItem={({ item: photo }) => {
+              renderItem={({ item: photo, index }) => {
                 const isCover = getCoverPhotoId(unit) === photo.id;
                 return (
                   <Pressable
                     style={styles.photoCard}
-                    onPress={() => setSelectedPhoto(photo)}
+                    onPress={() => setViewerIndex(index)}
                   >
                     <Image
                       source={{ uri: ensureDisplayUri(photo.path) }}
@@ -500,22 +520,63 @@ export default function UnitDetailScreen() {
           ) : null}
 
           <Modal
-            visible={Boolean(selectedPhoto)}
+            visible={viewerIndex !== null && unit.photos.length > 0}
             animationType="slide"
-            onRequestClose={() => setSelectedPhoto(null)}
+            onRequestClose={() => setViewerIndex(null)}
           >
             <SafeAreaView style={styles.viewerSafeArea} edges={["top", "bottom"]}>
               <View style={styles.viewerContent}>
-                {selectedPhoto ? (
-                  <Image
-                    source={{ uri: ensureDisplayUri(selectedPhoto.path) }}
-                    style={styles.viewerImage}
-                    contentFit="contain"
+                {viewerIndex !== null ? (
+                  <FlatList
+                    ref={viewerListRef}
+                    horizontal
+                    pagingEnabled
+                    data={unit.photos}
+                    initialScrollIndex={viewerIndex}
+                    keyExtractor={(photo) => photo.id}
+                    showsHorizontalScrollIndicator={false}
+                    getItemLayout={(_, index) => ({
+                      length: windowWidth,
+                      offset: windowWidth * index,
+                      index,
+                    })}
+                    onMomentumScrollEnd={(event) => {
+                      const nextIndex = Math.round(
+                        event.nativeEvent.contentOffset.x / windowWidth,
+                      );
+                      setViewerIndex(nextIndex);
+                    }}
+                    onScrollToIndexFailed={() => {
+                      // no-op fallback for dynamic list updates
+                    }}
+                    renderItem={({ item: photo }) => {
+                      const isPhotoMain = getCoverPhotoId(unit) === photo.id;
+                      return (
+                        <View style={[styles.viewerImageSlide, { width: windowWidth }]}>
+                          <Image
+                            source={{ uri: ensureDisplayUri(photo.path) }}
+                            style={styles.viewerImage}
+                            contentFit="contain"
+                          />
+                          {isPhotoMain ? (
+                            <View style={styles.viewerMainBadge}>
+                              <Text style={styles.mainBadgeText}>Main</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    }}
                   />
                 ) : null}
-                {selectedPhoto?.createdAtISO || selectedPhoto?.createdAt ? (
+
+                {currentPhoto?.createdAtISO || currentPhoto?.createdAt ? (
                   <Text style={styles.viewerDate}>
-                    {formatPhotoDate(selectedPhoto?.createdAtISO ?? selectedPhoto?.createdAt ?? "")}
+                    {formatPhotoDate(currentPhoto?.createdAtISO ?? currentPhoto?.createdAt ?? "")}
+                  </Text>
+                ) : null}
+                {viewerIndex !== null ? (
+                  <Text style={styles.viewerCounter}>
+                    {viewerIndex + 1} / {unit.photos.length}
                   </Text>
                 ) : null}
               </View>
@@ -523,20 +584,27 @@ export default function UnitDetailScreen() {
               <View style={styles.viewerActions}>
                 <Pressable
                   style={styles.viewerButtonSecondary}
-                  onPress={() => setSelectedPhoto(null)}
+                  onPress={() => setViewerIndex(null)}
                 >
                   <Text style={styles.buttonSecondaryText}>Close</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.viewerButtonSecondary}
-                  onPress={() => selectedPhoto && void setPhotoAsCover(selectedPhoto.id)}
+                  style={({ pressed }) => [
+                    styles.viewerButtonSecondary,
+                    pressed ? styles.viewerButtonPressed : null,
+                    isCurrentPhotoMain ? styles.viewerButtonDisabled : null,
+                  ]}
+                  disabled={isCurrentPhotoMain}
+                  onPress={() => currentPhoto && void setPhotoAsCover(currentPhoto.id)}
                 >
-                  <Text style={styles.buttonSecondaryText}>Set as main</Text>
+                  <Text style={styles.buttonSecondaryText}>
+                    {isCurrentPhotoMain ? "Main ✓" : "Set as main"}
+                  </Text>
                 </Pressable>
                 <Pressable
                   style={styles.viewerDeleteButton}
                   onPress={() => {
-                    if (!selectedPhoto) {
+                    if (!currentPhoto || viewerIndex === null) {
                       return;
                     }
 
@@ -546,7 +614,7 @@ export default function UnitDetailScreen() {
                         text: "Delete",
                         style: "destructive",
                         onPress: () => {
-                          void deletePhoto(selectedPhoto);
+                          void deletePhoto(currentPhoto, viewerIndex);
                         },
                       },
                     ]);
@@ -757,25 +825,50 @@ const styles = StyleSheet.create({
   },
   viewerContent: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-end",
     alignItems: "center",
-    padding: 12,
+    paddingVertical: 12,
     gap: 10,
+  },
+  viewerImageSlide: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
   },
   viewerImage: {
     width: "100%",
-    height: "80%",
+    height: "88%",
     backgroundColor: "#111827",
     borderRadius: 12,
+  },
+  viewerMainBadge: {
+    position: "absolute",
+    top: 16,
+    left: 20,
+    backgroundColor: "rgba(45,122,70,0.95)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   viewerDate: {
     color: "#e5e7eb",
     fontSize: 14,
   },
+  viewerCounter: {
+    color: "#d1d5db",
+    fontSize: 13,
+    fontWeight: "600",
+  },
   viewerActions: {
     flexDirection: "row",
     gap: 8,
     padding: 12,
+  },
+  viewerButtonPressed: {
+    opacity: 0.7,
+  },
+  viewerButtonDisabled: {
+    opacity: 0.65,
   },
   viewerButtonSecondary: {
     flex: 1,
