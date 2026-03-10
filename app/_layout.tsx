@@ -16,6 +16,7 @@ export default function RootLayout() {
         <Stack.Screen name="edit-unit/[id]" options={{ title: 'Edit Unit' }} />
         <Stack.Screen name="unit/[id]" options={{ title: 'Unit Detail' }} />
         <Stack.Screen name="round" options={{ title: 'Round' }} />
+        <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
