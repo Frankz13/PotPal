@@ -129,12 +129,12 @@ export default function HomeScreen() {
     if (unit.coverPhotoId) {
       const cover = unit.photos.find((photo) => photo.id === unit.coverPhotoId);
 
-      if (cover) {
+      if (cover?.path) {
         return cover;
       }
     }
 
-    return unit.photos[0];
+    return unit.photos.find((photo) => Boolean(photo.path));
   }, []);
 
   return (
@@ -210,7 +210,7 @@ export default function HomeScreen() {
 
             return (
               <Pressable style={styles.card} onPress={() => router.push(`/unit/${item.id}`)}>
-                {coverPhoto ? (
+                {coverPhoto?.path ? (
                   <Image source={{ uri: coverPhoto.path }} style={styles.cardCoverImage} contentFit="cover" />
                 ) : null}
                 <Text style={styles.cardTitle}>{item.name}</Text>

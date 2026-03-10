@@ -552,11 +552,17 @@ export default function UnitDetailScreen() {
                       }
                     }}
                   >
-                    <Image
-                      source={{ uri: ensureDisplayUri(photo.path) }}
-                      style={styles.image}
-                      contentFit="cover"
-                    />
+                    {photo.path ? (
+                      <Image
+                        source={{ uri: ensureDisplayUri(photo.path) }}
+                        style={styles.image}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={[styles.image, styles.missingPhotoPlaceholder]}>
+                        <Text style={styles.missingPhotoText}>Missing photo</Text>
+                      </View>
+                    )}
                     {isCover ? (
                       <View style={styles.mainBadge}>
                         <Text style={styles.mainBadgeText}>Main</Text>
@@ -607,11 +613,17 @@ export default function UnitDetailScreen() {
                       const isPhotoMain = getCoverPhotoId(unit) === photo.id;
                       return (
                         <View style={[styles.viewerImageSlide, { width: windowWidth }]}>
-                          <Image
-                            source={{ uri: ensureDisplayUri(photo.path) }}
-                            style={styles.viewerImage}
-                            contentFit="contain"
-                          />
+                          {photo.path ? (
+                            <Image
+                              source={{ uri: ensureDisplayUri(photo.path) }}
+                              style={styles.viewerImage}
+                              contentFit="contain"
+                            />
+                          ) : (
+                            <View style={[styles.viewerImage, styles.missingPhotoPlaceholder]}>
+                              <Text style={styles.missingPhotoText}>Missing photo</Text>
+                            </View>
+                          )}
                           {isPhotoMain ? (
                             <View style={styles.viewerMainBadge}>
                               <Text style={styles.mainBadgeText}>Main</Text>
@@ -870,6 +882,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#e5e7eb",
   },
+  missingPhotoPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  missingPhotoText: {
+    color: "#4b5563",
+    fontWeight: "600",
+  },
+
   photoCard: {
     width: 132,
     gap: 4,
