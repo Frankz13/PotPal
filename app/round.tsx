@@ -1,9 +1,16 @@
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CARE_TASK_LABELS, type CareTaskKey } from '@/lib/care';
+import {
+  CARE_TASK_LABELS,
+  completeCareTasks,
+  type CareTaskKey,
+  compareCareUrgency,
+  getDueTaskKeys,
+  getTaskStatus,
+} from '@/lib/care';
 import { type LocationFilter, matchesLocationFilter } from '@/lib/locations';
 import type { Unit } from '@/lib/models';
 import { loadUnits, saveUnits } from '@/lib/storage';
@@ -13,16 +20,16 @@ export default function RoundScreen() {
   const activeLocation = (params.location as LocationFilter | undefined) ?? 'All';
   const [units, setUnits] = useState<Unit[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [completedTaskKeys, setCompletedTaskKeys] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
       const run = async () => {
         const saved = await loadUnits();
         const filtered = saved.filter((unit) => matchesLocationFilter(unit.location, activeLocation));
-        setUnits(filtered);
+        const sorted = [...filtered].sort(compareCareUrgency);
+
+        setUnits(sorted);
         setCurrentIndex(0);
-        setCompletedTaskKeys(new Set());
       };
 
       void run();
@@ -32,54 +39,49 @@ export default function RoundScreen() {
   const currentUnit = units[currentIndex] ?? null;
   const roundLabel = activeLocation === 'All' ? 'All locations round' : `${activeLocation} round`;
 
-  const markTaskDone = useCallback(
-    async (taskKey: CareTaskKey) => {
-      if (!currentUnit) {
-        return;
-      }
+  const completeTasksForUnit = useCallback(async (unitId: string, taskKeys: CareTaskKey[]) => {
+    if (taskKeys.length === 0) {
+      return;
+    }
 
-      const nowISO = new Date().toISOString();
-      setCompletedTaskKeys((prev) => new Set(prev).add(`${currentUnit.id}:${taskKey}`));
-
-      setUnits((prev) =>
-        prev.map((unit) =>
-          unit.id === currentUnit.id
-            ? {
-                ...unit,
-                care: {
-                  ...unit.care,
-                  [taskKey]: {
-                    ...unit.care[taskKey],
-                    lastDoneISO: nowISO,
-                  },
-                },
-              }
-            : unit,
-        ),
-      );
-
-      const allUnits = await loadUnits();
-      const updatedAllUnits = allUnits.map((unit) => {
-        if (unit.id !== currentUnit.id) {
+    const nowISO = new Date().toISOString();
+    setUnits((prev) => {
+      const updatedUnits = prev.map((unit) => {
+        if (unit.id !== unitId) {
           return unit;
         }
 
         return {
           ...unit,
-          care: {
-            ...unit.care,
-            [taskKey]: {
-              ...unit.care[taskKey],
-              lastDoneISO: nowISO,
-            },
-          },
+          care: completeCareTasks(unit.care, taskKeys, nowISO),
         };
       });
 
-      await saveUnits(updatedAllUnits);
-    },
-    [currentUnit],
-  );
+      return updatedUnits;
+    });
+
+    const allUnits = await loadUnits();
+    const updatedAllUnits = allUnits.map((unit) => {
+      if (unit.id !== unitId) {
+        return unit;
+      }
+
+      return {
+        ...unit,
+        care: completeCareTasks(unit.care, taskKeys, nowISO),
+      };
+    });
+
+    await saveUnits(updatedAllUnits);
+  }, []);
+
+  const dueTaskKeysForCurrentUnit = useMemo(() => {
+    if (!currentUnit) {
+      return [] as CareTaskKey[];
+    }
+
+    return getDueTaskKeys(currentUnit.care);
+  }, [currentUnit]);
 
   const totalCount = units.length;
 
@@ -96,22 +98,13 @@ export default function RoundScreen() {
   };
 
   const getDueStatus = (lastDoneISO: string | null, intervalDays: number) => {
-    if (!lastDoneISO) {
+    const status = getTaskStatus(lastDoneISO, intervalDays);
+
+    if (status === 'overdue') {
       return 'Overdue';
     }
 
-    const dueDate = new Date(lastDoneISO);
-    dueDate.setDate(dueDate.getDate() + intervalDays);
-
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dueDay = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-
-    if (dueDay < today) {
-      return 'Overdue';
-    }
-
-    if (dueDay.getTime() === today.getTime()) {
+    if (status === 'today') {
       return 'Due today';
     }
 
@@ -146,6 +139,17 @@ export default function RoundScreen() {
             <Text style={styles.unitMeta}>Location: {currentUnit.location}</Text>
             <Text style={styles.unitMeta}>Foto: {currentUnit.photos.length}</Text>
 
+            <Pressable
+              disabled={dueTaskKeysForCurrentUnit.length === 0}
+              style={[styles.bulkDoneButton, dueTaskKeysForCurrentUnit.length === 0 && styles.bulkDoneButtonDisabled]}
+              onPress={() => {
+                void completeTasksForUnit(currentUnit.id, dueTaskKeysForCurrentUnit);
+              }}>
+              <Text style={styles.bulkDoneButtonText}>
+                {dueTaskKeysForCurrentUnit.length === 0 ? 'All up to date' : 'Done all due'}
+              </Text>
+            </Pressable>
+
             <View style={styles.careList}>
               {(Object.keys(currentUnit.care) as CareTaskKey[]).map((taskKey) => (
                 <View key={taskKey} style={styles.careRow}>
@@ -158,20 +162,21 @@ export default function RoundScreen() {
                     </Text>
                   </View>
                   {(() => {
-                    const isDoneThisSession = completedTaskKeys.has(`${currentUnit.id}:${taskKey}`);
+                    const status = getTaskStatus(currentUnit.care[taskKey].lastDoneISO, currentUnit.care[taskKey].intervalDays);
+                    const isDue = status !== 'upcoming';
 
                     return (
                       <Pressable
-                        disabled={isDoneThisSession}
+                        disabled={!isDue}
                         style={({ pressed }) => [
                           styles.doneButton,
-                          isDoneThisSession && styles.doneButtonDisabled,
-                          pressed && !isDoneThisSession && styles.doneButtonPressed,
+                          !isDue && styles.doneButtonDisabled,
+                          pressed && isDue && styles.doneButtonPressed,
                         ]}
                         onPress={() => {
-                          void markTaskDone(taskKey);
+                          void completeTasksForUnit(currentUnit.id, [taskKey]);
                         }}>
-                        <Text style={styles.doneButtonText}>{isDoneThisSession ? 'Done ✓' : 'Done'}</Text>
+                        <Text style={styles.doneButtonText}>{isDue ? 'Done' : 'Done ✓'}</Text>
                       </Pressable>
                     );
                   })()}
@@ -230,6 +235,20 @@ const styles = StyleSheet.create({
   },
   unitMeta: {
     color: '#374151',
+  },
+  bulkDoneButton: {
+    marginTop: 8,
+    backgroundColor: '#1f6feb',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  bulkDoneButtonDisabled: {
+    backgroundColor: '#6b7280',
+  },
+  bulkDoneButtonText: {
+    color: 'white',
+    fontWeight: '700',
   },
   careList: {
     marginTop: 8,

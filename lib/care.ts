@@ -92,3 +92,59 @@ export const CARE_TASK_LABELS: Record<CareTaskKey, string> = {
   check: 'Check',
   fertilize: 'Fertilize',
 };
+
+export function getDueTaskKeys(care: UnitCare): CareTaskKey[] {
+  return (Object.keys(care) as CareTaskKey[]).filter((taskKey) => {
+    const task = care[taskKey];
+    return getTaskStatus(task.lastDoneISO, task.intervalDays) !== 'upcoming';
+  });
+}
+
+export function completeCareTasks(care: UnitCare, taskKeys: CareTaskKey[], completedAtISO: string): UnitCare {
+  if (taskKeys.length === 0) {
+    return care;
+  }
+
+  return (Object.keys(care) as CareTaskKey[]).reduce<UnitCare>((nextCare, taskKey) => {
+    const task = care[taskKey];
+    nextCare[taskKey] = taskKeys.includes(taskKey) ? { ...task, lastDoneISO: completedAtISO } : task;
+    return nextCare;
+  }, {} as UnitCare);
+}
+
+export function getUnitUrgencyCounts(care: UnitCare): { overdueCount: number; dueTodayCount: number } {
+  let overdueCount = 0;
+  let dueTodayCount = 0;
+
+  for (const taskKey of Object.keys(care) as CareTaskKey[]) {
+    const task = care[taskKey];
+    const status = getTaskStatus(task.lastDoneISO, task.intervalDays);
+    if (status === 'overdue') {
+      overdueCount += 1;
+    }
+    if (status === 'today') {
+      dueTodayCount += 1;
+    }
+  }
+
+  return { overdueCount, dueTodayCount };
+}
+
+
+export function compareCareUrgency(
+  a: { name: string; care: UnitCare },
+  b: { name: string; care: UnitCare },
+): number {
+  const aUrgency = getUnitUrgencyCounts(a.care);
+  const bUrgency = getUnitUrgencyCounts(b.care);
+
+  if (aUrgency.overdueCount !== bUrgency.overdueCount) {
+    return bUrgency.overdueCount - aUrgency.overdueCount;
+  }
+
+  if (aUrgency.dueTodayCount !== bUrgency.dueTodayCount) {
+    return bUrgency.dueTodayCount - aUrgency.dueTodayCount;
+  }
+
+  return a.name.localeCompare(b.name);
+}
