@@ -4,7 +4,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CARE_TASK_LABELS, type CareTaskKey, getDueDate, getTaskStatus } from '@/lib/care';
+import {
+  CARE_TASK_LABELS,
+  completeCareTasks,
+  type CareTaskKey,
+  compareCareUrgency,
+  getDueDate,
+  getTaskStatus,
+} from '@/lib/care';
 import { getLocationFilterOptions, type LocationFilter, matchesLocationFilter } from '@/lib/locations';
 import type { Unit } from '@/lib/models';
 import { loadHomeLocationFilter, loadUnits, saveHomeLocationFilter, saveUnits } from '@/lib/storage';
@@ -46,10 +53,14 @@ export default function HomeScreen() {
     [locationFilter, units],
   );
 
+  const sortedUnits = useMemo(() => {
+    return [...filteredUnits].sort(compareCareUrgency);
+  }, [filteredUnits]);
+
   const todayTasks = useMemo(() => {
     const dueTasks: TodayTask[] = [];
 
-    for (const unit of filteredUnits) {
+    for (const unit of sortedUnits) {
       (Object.keys(unit.care) as CareTaskKey[]).forEach((taskKey) => {
         const task = unit.care[taskKey];
         const status = getTaskStatus(task.lastDoneISO, task.intervalDays);
@@ -80,33 +91,30 @@ export default function HomeScreen() {
 
       return getDueDate(a.lastDoneISO, a.intervalDays).getTime() - getDueDate(b.lastDoneISO, b.intervalDays).getTime();
     });
-  }, [filteredUnits]);
+  }, [sortedUnits]);
 
-  const markTaskDone = useCallback(
-    async (unitId: string, taskKey: CareTaskKey) => {
-      const nowISO = new Date().toISOString();
-      const updatedUnits = units.map((unit) => {
+  const completeTasksForUnit = useCallback(async (unitId: string, taskKeys: CareTaskKey[]) => {
+    if (taskKeys.length === 0) {
+      return;
+    }
+
+    const nowISO = new Date().toISOString();
+    setUnits((prev) => {
+      const updatedUnits = prev.map((unit) => {
         if (unit.id !== unitId) {
           return unit;
         }
 
         return {
           ...unit,
-          care: {
-            ...unit.care,
-            [taskKey]: {
-              ...unit.care[taskKey],
-              lastDoneISO: nowISO,
-            },
-          },
+          care: completeCareTasks(unit.care, taskKeys, nowISO),
         };
       });
 
-      setUnits(updatedUnits);
-      await saveUnits(updatedUnits);
-    },
-    [units],
-  );
+      void saveUnits(updatedUnits);
+      return updatedUnits;
+    });
+  }, []);
 
   const onSelectFilter = useCallback(async (nextFilter: LocationFilter) => {
     setLocationFilter(nextFilter);
@@ -133,7 +141,7 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
         <FlatList
-          data={filteredUnits}
+          data={sortedUnits}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
@@ -169,7 +177,7 @@ export default function HomeScreen() {
                         </Text>
                         <Text style={styles.todayItemMeta}>{status === 'overdue' ? 'Overdue' : 'Due today'}</Text>
                       </View>
-                      <Pressable style={styles.todayDoneButton} onPress={() => void markTaskDone(task.unitId, task.taskKey)}>
+                      <Pressable style={styles.todayDoneButton} onPress={() => void completeTasksForUnit(task.unitId, [task.taskKey])}>
                         <Text style={styles.todayDoneButtonText}>Done</Text>
                       </Pressable>
                     </View>
