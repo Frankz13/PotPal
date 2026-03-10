@@ -5,7 +5,7 @@ import type { LocationFilter } from '@/lib/locations';
 import type { Unit, UnitPhoto } from '@/lib/models';
 
 const DATA_FILE = `${FileSystem.documentDirectory}units.json`;
-const PHOTOS_DIR = `${FileSystem.documentDirectory}unit-photos`;
+export const UNIT_PHOTOS_DIR = `${FileSystem.documentDirectory}unit-photos`;
 const HOME_FILTER_FILE = `${FileSystem.documentDirectory}home-filter.json`;
 
 export async function loadUnits(): Promise<Unit[]> {
@@ -63,16 +63,16 @@ export async function saveUnits(units: Unit[]): Promise<void> {
 }
 
 export async function persistPhoto(uri: string, unitId: string): Promise<string> {
-  const photosDirInfo = await FileSystem.getInfoAsync(PHOTOS_DIR);
+  const photosDirInfo = await FileSystem.getInfoAsync(UNIT_PHOTOS_DIR);
 
   if (!photosDirInfo.exists) {
-    await FileSystem.makeDirectoryAsync(PHOTOS_DIR, { intermediates: true });
+    await FileSystem.makeDirectoryAsync(UNIT_PHOTOS_DIR, { intermediates: true });
   }
 
   const extensionMatch = /\.([a-zA-Z0-9]+)(\?|$)/.exec(uri);
   const extension = extensionMatch?.[1] ?? 'jpg';
   const filename = `${unitId}-${Date.now()}.${extension}`;
-  const destination = `${PHOTOS_DIR}/${filename}`;
+  const destination = `${UNIT_PHOTOS_DIR}/${filename}`;
 
   await FileSystem.copyAsync({
     from: uri,
