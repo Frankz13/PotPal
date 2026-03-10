@@ -187,9 +187,14 @@ export default function HomeScreen() {
 
               <View style={styles.headerRow}>
                 <Text style={styles.title}>Units</Text>
-                <Pressable style={styles.primaryButton} onPress={() => router.push('/add-unit')}>
-                  <Text style={styles.primaryButtonText}>+ Add Unit</Text>
-                </Pressable>
+                <View style={styles.headerActions}>
+                  <Pressable style={styles.secondaryButton} onPress={() => router.push('/settings')}>
+                    <Text style={styles.secondaryButtonText}>⚙ Settings</Text>
+                  </Pressable>
+                  <Pressable style={styles.primaryButton} onPress={() => router.push('/add-unit')}>
+                    <Text style={styles.primaryButtonText}>+ Add Unit</Text>
+                  </Pressable>
+                </View>
               </View>
             </>
           }
@@ -320,6 +325,23 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  secondaryButton: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'white',
+  },
+  secondaryButtonText: {
+    color: '#374151',
+    fontWeight: '600',
   },
   primaryButton: {
     backgroundColor: '#2d7a46',
