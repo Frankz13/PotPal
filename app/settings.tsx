@@ -21,6 +21,7 @@ type FullBackupPhoto = {
   createdAt: string;
   createdAtISO?: string;
   backupFile: string;
+  path?: string;
 };
 
 type UnitsBackupV2 = {
@@ -247,6 +248,7 @@ export default function SettingsScreen() {
                 createdAt: photo.createdAt,
                 createdAtISO: photo.createdAtISO,
                 backupFile,
+                path: photo.path,
               };
             }),
           );
@@ -351,6 +353,9 @@ export default function SettingsScreen() {
                   await FileSystem.makeDirectoryAsync(UNIT_PHOTOS_DIR, { intermediates: true });
                 }
 
+                let restoredPhotos = 0;
+                let totalPhotos = 0;
+
                 const rewrittenUnits = await Promise.all(
                   parsed.units.map(async (rawUnit: any) => {
                     const unitId = typeof rawUnit?.id === 'string' ? rawUnit.id : `${Date.now()}`;
@@ -358,20 +363,26 @@ export default function SettingsScreen() {
 
                     const photos: UnitPhoto[] = await Promise.all(
                       rawPhotos.map(async (photo: any, index: number) => {
+                        totalPhotos += 1;
                         const nowISO = new Date().toISOString();
                         const photoId = typeof photo?.id === 'string' ? photo.id : `${Date.now()}-${index}`;
                         const backupFile = typeof photo?.backupFile === 'string' ? photo.backupFile : '';
                         const ext = extensionFromPath(backupFile || photoId);
-                        const destination = `${UNIT_PHOTOS_DIR}/${unitId}-${photoId}-${Date.now()}.${ext}`;
+                        const destination = `${UNIT_PHOTOS_DIR}/${photoId}.${ext}`;
                         const photoEntry = zipFiles.find((entry) => entry.path === backupFile);
                         let path = '';
 
                         if (photoEntry) {
                           try {
-                            await FileSystem.writeAsStringAsync(destination, bytesToBase64(photoEntry.data), {
+                            const base64Data = bytesToBase64(photoEntry.data);
+                            await FileSystem.writeAsStringAsync(destination, base64Data, {
                               encoding: FileSystem.EncodingType.Base64,
                             });
-                            path = destination;
+                            const restoredInfo = await FileSystem.getInfoAsync(destination);
+                            if (restoredInfo.exists) {
+                              path = destination;
+                              restoredPhotos += 1;
+                            }
                           } catch {
                             path = '';
                           }
@@ -394,7 +405,7 @@ export default function SettingsScreen() {
 
                 await saveUnits(rewrittenUnits);
 
-                Alert.alert('Import complete', 'Your units and photos were restored from FULL backup.', [
+                Alert.alert('Import complete', `Imported ${rewrittenUnits.length} units. Restored ${restoredPhotos}/${totalPhotos} photos.`, [
                   {
                     text: 'OK',
                     onPress: () => router.replace('/'),
