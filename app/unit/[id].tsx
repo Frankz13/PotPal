@@ -441,6 +441,13 @@ export default function UnitDetailScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         >
+          <Pressable
+            style={styles.editButton}
+            onPress={() => router.push(`/edit-unit/${unit.id}`)}
+          >
+            <Text style={styles.editButtonText}>Edit</Text>
+          </Pressable>
+
           <Text style={styles.name}>{unit.name}</Text>
           <Text style={styles.meta}>Location: {unit.location}</Text>
           <Text style={styles.meta}>Species: {unit.species}</Text>
@@ -733,6 +740,19 @@ const styles = StyleSheet.create({
   notFoundMessage: {
     color: "#374151",
     fontSize: 16,
+  },
+  editButton: {
+    alignSelf: "flex-start",
+    borderColor: "#2d7a46",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 2,
+  },
+  editButtonText: {
+    color: "#2d7a46",
+    fontWeight: "700",
   },
   name: {
     fontSize: 28,
