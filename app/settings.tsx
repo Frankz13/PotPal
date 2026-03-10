@@ -30,7 +30,7 @@ type UnitsBackupV2 = {
   units: Array<Omit<Unit, 'photos'> & { photos: FullBackupPhoto[] }>;
 };
 
-type BusyAction = 'export-json' | 'import-json' | 'export-full' | 'import-full' | null;
+type BusyAction = 'export-json' | 'import-json' | 'export-full' | 'import-full' | 'repair-photos' | null;
 
 function formatDatePart(value: number): string {
   return String(value).padStart(2, '0');
@@ -70,6 +70,18 @@ function normalizeReadUri(path: string): string {
   }
 
   return path;
+}
+
+function isUnitPhotoFile(path: string): boolean {
+  const normalizedPath = normalizeReadUri(path);
+  return normalizedPath.startsWith(`${UNIT_PHOTOS_DIR}/`) || normalizedPath === UNIT_PHOTOS_DIR;
+}
+
+async function ensurePhotosDirectory(): Promise<void> {
+  const photosDirInfo = await FileSystem.getInfoAsync(UNIT_PHOTOS_DIR);
+  if (!photosDirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(UNIT_PHOTOS_DIR, { intermediates: true });
+  }
 }
 
 function normalizeImportedUnit(unit: any): Unit {
@@ -222,11 +234,14 @@ export default function SettingsScreen() {
       setBusyAction('export-full');
       const units = await loadUnits();
       const zipFiles: Array<{ path: string; data: Uint8Array }> = [];
+      let totalPhotos = 0;
+      let includedPhotos = 0;
 
       const fullUnits = await Promise.all(
         units.map(async (unit) => {
           const photos = await Promise.all(
             unit.photos.map(async (photo) => {
+              totalPhotos += 1;
               const ext = extensionFromPath(photo.path);
               const backupFile = `photos/${photo.id}.${ext}`;
               const sourceUri = normalizeReadUri(photo.path);
@@ -238,6 +253,7 @@ export default function SettingsScreen() {
                     encoding: FileSystem.EncodingType.Base64,
                   });
                   zipFiles.push({ path: backupFile, data: base64ToBytes(base64) });
+                  includedPhotos += 1;
                 }
               } catch {
                 // missing photo files are tolerated
@@ -292,9 +308,92 @@ export default function SettingsScreen() {
         dialogTitle: 'Export FULL backup (ZIP)',
       });
 
-      Alert.alert('FULL backup exported', 'Your ZIP backup is ready to share or save.');
+      Alert.alert(
+        'FULL backup exported',
+        `Exported ${units.length} units. Included ${includedPhotos}/${totalPhotos} photos (Skipped ${totalPhotos - includedPhotos}).`,
+      );
     } catch {
       Alert.alert('Export failed', 'Unable to export FULL backup. Please try again.');
+    } finally {
+      setBusyAction(null);
+    }
+  }, []);
+
+  const onRepairPhotos = useCallback(async () => {
+    try {
+      setBusyAction('repair-photos');
+      await ensurePhotosDirectory();
+      const units = await loadUnits();
+
+      let totalWithPath = 0;
+      let repaired = 0;
+      let unreadable = 0;
+
+      const rewrittenUnits: Unit[] = await Promise.all(
+        units.map(async (unit) => {
+          const photos = await Promise.all(
+            unit.photos.map(async (photo) => {
+              if (!photo.path) {
+                return photo;
+              }
+
+              totalWithPath += 1;
+              const sourceUri = normalizeReadUri(photo.path);
+
+              try {
+                const sourceInfo = await FileSystem.getInfoAsync(sourceUri);
+                if (!sourceInfo.exists) {
+                  unreadable += 1;
+                  return photo;
+                }
+
+                if (isUnitPhotoFile(sourceUri)) {
+                  return photo;
+                }
+
+                const ext = extensionFromPath(sourceUri);
+                const destination = `${UNIT_PHOTOS_DIR}/${photo.id}.${ext}`;
+
+                try {
+                  await FileSystem.copyAsync({ from: sourceUri, to: destination });
+                } catch {
+                  const base64 = await FileSystem.readAsStringAsync(sourceUri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                  });
+                  await FileSystem.writeAsStringAsync(destination, base64, {
+                    encoding: FileSystem.EncodingType.Base64,
+                  });
+                }
+
+                const migratedInfo = await FileSystem.getInfoAsync(destination);
+                if (!migratedInfo.exists) {
+                  unreadable += 1;
+                  return photo;
+                }
+
+                repaired += 1;
+                return {
+                  ...photo,
+                  path: destination,
+                };
+              } catch {
+                unreadable += 1;
+                return photo;
+              }
+            }),
+          );
+
+          return {
+            ...unit,
+            photos,
+          };
+        }),
+      );
+
+      await saveUnits(rewrittenUnits);
+      Alert.alert('Repair complete', `Repaired ${repaired}/${totalWithPath} photos.\nSkipped ${unreadable} (unreadable).`);
+    } catch {
+      Alert.alert('Repair failed', 'Unable to repair photos. Please try again.');
     } finally {
       setBusyAction(null);
     }
@@ -459,10 +558,19 @@ export default function SettingsScreen() {
           <Text style={styles.buttonText}>{busyAction === 'import-full' ? 'Importing…' : 'Import FULL backup (ZIP)'}</Text>
         </Pressable>
 
+        <Pressable
+          style={[styles.button, styles.repairButton, disabled && styles.buttonDisabled]}
+          disabled={disabled}
+          onPress={() => void onRepairPhotos()}>
+          <Text style={styles.buttonText}>{busyAction === 'repair-photos' ? 'Repairing…' : 'Repair photos'}</Text>
+        </Pressable>
+
         {busyAction ? (
           <View style={styles.busyRow}>
             <ActivityIndicator size="small" color="#2d7a46" />
-            <Text style={styles.busyText}>{busyAction.startsWith('export') ? 'Exporting...' : 'Importing...'}</Text>
+            <Text style={styles.busyText}>
+              {busyAction === 'repair-photos' ? 'Repairing...' : busyAction.startsWith('export') ? 'Exporting...' : 'Importing...'}
+            </Text>
           </View>
         ) : null}
       </View>
@@ -503,6 +611,9 @@ const styles = StyleSheet.create({
   },
   importFullButton: {
     backgroundColor: '#7c3aed',
+  },
+  repairButton: {
+    backgroundColor: '#b45309',
   },
   buttonDisabled: {
     opacity: 0.5,
