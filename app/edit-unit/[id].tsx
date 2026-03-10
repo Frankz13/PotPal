@@ -132,7 +132,7 @@ export default function EditUnitScreen() {
     });
 
     await saveUnits(nextUnits);
-    router.replace(`/unit/${unit.id}`);
+    router.back();
   };
 
   if (isLoading) {
